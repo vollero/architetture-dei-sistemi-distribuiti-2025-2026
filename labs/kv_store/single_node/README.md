@@ -15,6 +15,7 @@ L'idea non e' fermarsi qui, ma usare questa base come contratto iniziale da mett
 ## File
 
 - `server.py`: server key-value minimale
+- `server_dispatch.py`: stessa interfaccia, implementata con dispatch table
 - `client.py`: client interattivo semplice
 
 ## Avvio
@@ -25,11 +26,21 @@ Terminale 1:
 python3 labs/kv_store/single_node/server.py
 ```
 
+oppure:
+
+```bash
+python3 labs/kv_store/single_node/server_dispatch.py
+```
+
 Terminale 2:
 
 ```bash
 python3 labs/kv_store/single_node/client.py
 ```
+
+Nota: `client.py` usa di default la porta `6380`, quindi per provare
+`server_dispatch.py` va cambiata la porta nel client oppure va usato un
+client TCP generico come `nc 127.0.0.1 6381`.
 
 ## Comandi supportati
 
@@ -67,3 +78,14 @@ NOT_FOUND
 - introdurre `TTL`;
 - aggiungere `CAS key expected new_value`;
 - separare parser, storage engine e rete in moduli distinti.
+
+## Nota didattica
+
+`server.py` e `server_dispatch.py` espongono lo stesso contratto, ma usano
+due strategie implementative diverse:
+
+- catena di `if`;
+- dizionario di dispatch comando -> handler.
+
+Questo permette di discutere come l'interfaccia resti stabile mentre cambia
+l'organizzazione interna del codice.

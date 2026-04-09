@@ -67,6 +67,7 @@ from typing import List, Tuple
 BACKENDS: List[Tuple[str, int]] = [
     ("127.0.0.1", 8001),
     ("127.0.0.1", 8002),
+    ("127.0.0.1", 8003),
 ]
 
 DEFAULT_LB_PORT = 8080
@@ -259,7 +260,7 @@ class RedirectHandler(BaseHTTPRequestHandler):
             background: white; border-radius: 12px;
             padding: 35px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
             margin-bottom: 20px;
-        }}
+            }}
         h1 {{ color: #1B4F72; text-align: center; }}
         .mode {{
             text-align: center; font-size: 1.5em; font-weight: bold;

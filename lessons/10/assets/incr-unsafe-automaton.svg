@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760">
   <defs>
     <style>
-      .title { font: 700 28px Arial, sans-serif; fill: #1b2a41; }
-      .label { font: 600 16px Arial, sans-serif; fill: #243b53; }
-      .small { font: 14px Arial, sans-serif; fill: #334e68; }
-      .node { fill: #f8fbff; stroke: #2e5b88; stroke-width: 2; rx: 14; ry: 14; }
+      .bg { fill: #ffffff; }
+      .title { font: 700 28px Arial, sans-serif; fill: #102033; }
+      .label { font: 600 16px Arial, sans-serif; fill: #16324f; }
+      .small { font: 14px Arial, sans-serif; fill: #243b53; }
+      .node { fill: #ffffff; stroke: #2e5b88; stroke-width: 2; rx: 14; ry: 14; }
       .bad { fill: #fff1f0; stroke: #b42318; stroke-width: 3; rx: 14; ry: 14; }
-      .arrow { stroke: #486581; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
+      .arrow { stroke: #2f4858; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
       .badarrow { stroke: #b42318; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead-red); }
       .note { fill: #fff8db; stroke: #d4b106; stroke-width: 1.5; rx: 10; ry: 10; }
     </style>
@@ -17,6 +18,8 @@
       <polygon points="0,0 10,4 0,8" fill="#b42318"/>
     </marker>
   </defs>
+
+  <rect x="0" y="0" width="1240" height="760" class="bg"/>
 
   <text x="40" y="46" class="title">INCR con due thread: automa globale unsafe</text>
   <text x="40" y="74" class="small">Notazione stato: (T1, T2, counter). Il lock non esiste: ogni interleaving e' ammesso.</text>
@@ -68,7 +71,7 @@
   <path d="M1100 212 L1100 300" class="badarrow"/>
   <text x="1114" y="260" class="small">T2: write 11</text>
 
-  <path d="M290 166 C330 166, 330 346, 360 346" class="arrow"/>
+  <path d="M290 166 L320 166 L320 346 L360 346" class="arrow"/>
   <text x="210" y="270" class="small">T2: read 10</text>
 
   <path d="M610 346 L680 346" class="arrow"/>

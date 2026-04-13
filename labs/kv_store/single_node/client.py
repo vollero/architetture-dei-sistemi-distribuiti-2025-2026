@@ -7,7 +7,7 @@ import socket
 
 
 HOST = "127.0.0.1"
-PORT = 6381
+PORT = 6380
 
 
 def main() -> None:

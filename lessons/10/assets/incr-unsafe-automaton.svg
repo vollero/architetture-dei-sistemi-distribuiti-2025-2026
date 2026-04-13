@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760">
+  <defs>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #1b2a41; }
+      .label { font: 600 16px Arial, sans-serif; fill: #243b53; }
+      .small { font: 14px Arial, sans-serif; fill: #334e68; }
+      .node { fill: #f8fbff; stroke: #2e5b88; stroke-width: 2; rx: 14; ry: 14; }
+      .bad { fill: #fff1f0; stroke: #b42318; stroke-width: 3; rx: 14; ry: 14; }
+      .arrow { stroke: #486581; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
+      .badarrow { stroke: #b42318; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead-red); }
+      .note { fill: #fff8db; stroke: #d4b106; stroke-width: 1.5; rx: 10; ry: 10; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#486581"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#b42318"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="46" class="title">INCR con due thread: automa globale unsafe</text>
+  <text x="40" y="74" class="small">Notazione stato: (T1, T2, counter). Il lock non esiste: ogni interleaving e' ammesso.</text>
+
+  <rect x="40" y="120" width="250" height="92" class="node"/>
+  <text x="60" y="150" class="label">S0</text>
+  <text x="60" y="178" class="small">(Idle, Idle, 10)</text>
+  <text x="60" y="198" class="small">Entrambi pronti a eseguire INCR</text>
+
+  <rect x="360" y="120" width="250" height="92" class="node"/>
+  <text x="380" y="150" class="label">S1</text>
+  <text x="380" y="178" class="small">(Read(10), Idle, 10)</text>
+  <text x="380" y="198" class="small">T1 ha letto 10</text>
+
+  <rect x="680" y="120" width="250" height="92" class="node"/>
+  <text x="700" y="150" class="label">S2</text>
+  <text x="700" y="178" class="small">(Read(10), Read(10), 10)</text>
+  <text x="700" y="198" class="small">Entrambi hanno letto lo stesso valore</text>
+
+  <rect x="1000" y="120" width="200" height="92" class="node"/>
+  <text x="1020" y="150" class="label">S3</text>
+  <text x="1020" y="178" class="small">(Done, Read(10), 11)</text>
+  <text x="1020" y="198" class="small">T1 scrive 11</text>
+
+  <rect x="1000" y="300" width="200" height="92" class="bad"/>
+  <text x="1020" y="330" class="label">Sbad</text>
+  <text x="1020" y="358" class="small">(Done, Done, 11)</text>
+  <text x="1020" y="378" class="small">Lost update: finale scorretto</text>
+
+  <rect x="680" y="300" width="250" height="92" class="node"/>
+  <text x="700" y="330" class="label">S4</text>
+  <text x="700" y="358" class="small">(Read(10), Done, 11)</text>
+  <text x="700" y="378" class="small">T2 scrive 11 per primo</text>
+
+  <rect x="360" y="300" width="250" height="92" class="node"/>
+  <text x="380" y="330" class="label">S5</text>
+  <text x="380" y="358" class="small">(Idle, Read(10), 10)</text>
+  <text x="380" y="378" class="small">Percorso simmetrico con T2</text>
+
+  <path d="M290 166 L360 166" class="arrow"/>
+  <text x="304" y="154" class="small">T1: read 10</text>
+
+  <path d="M610 166 L680 166" class="arrow"/>
+  <text x="620" y="154" class="small">T2: read 10</text>
+
+  <path d="M930 166 L1000 166" class="arrow"/>
+  <text x="940" y="154" class="small">T1: write 11</text>
+
+  <path d="M1100 212 L1100 300" class="badarrow"/>
+  <text x="1114" y="260" class="small">T2: write 11</text>
+
+  <path d="M290 166 C330 166, 330 346, 360 346" class="arrow"/>
+  <text x="210" y="270" class="small">T2: read 10</text>
+
+  <path d="M610 346 L680 346" class="arrow"/>
+  <text x="620" y="334" class="small">T1: read 10</text>
+
+  <path d="M930 346 L1000 346" class="arrow"/>
+  <text x="940" y="334" class="small">T2: write 11</text>
+
+  <path d="M805 212 L805 300" class="badarrow"/>
+  <text x="819" y="260" class="small">T1: write 11</text>
+
+  <rect x="40" y="520" width="1160" height="150" class="note"/>
+  <text x="60" y="550" class="label">Lettura del grafo</text>
+  <text x="60" y="580" class="small">1. Lo stato S2 e' il punto critico: entrambi i thread hanno letto lo stesso valore condiviso.</text>
+  <text x="60" y="606" class="small">2. Da S2 sono raggiungibili due percorsi simmetrici, ma entrambi convergono in un finale con counter = 11.</text>
+  <text x="60" y="632" class="small">3. Questo stato finale e' raggiungibile solo perche' il path read-modify-write non e' protetto da una sezione critica.</text>
+    <text x="60" y="658" class="small">4. Safety violata: due INCR concorrenti non preservano l'invariante "valore finale = valore iniziale + numero di incrementi".</text>
+</svg>

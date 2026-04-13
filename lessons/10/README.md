@@ -14,6 +14,7 @@ L'interfaccia del servizio resta quasi invariata. Il problema si sposta su:
 
 - [Handout tecnico](./handout.md)
 - [Contratto del protocollo](./api-contract.md)
+- [Rappresentazione ad automi](./automata.md)
 - [Lab multithread](../../labs/kv_store/threaded_locking/README.md)
 - [Slide della lezione](../../slides/10-kv-store-threaded.pdf)
 

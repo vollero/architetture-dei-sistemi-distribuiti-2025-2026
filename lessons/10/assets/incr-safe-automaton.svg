@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="820" viewBox="0 0 1320 820">
+  <defs>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #1b2a41; }
+      .label { font: 600 16px Arial, sans-serif; fill: #243b53; }
+      .small { font: 14px Arial, sans-serif; fill: #334e68; }
+      .node { fill: #f8fbff; stroke: #2e5b88; stroke-width: 2; rx: 14; ry: 14; }
+      .good { fill: #f1fff4; stroke: #2f855a; stroke-width: 3; rx: 14; ry: 14; }
+      .blocked { fill: #fff8db; stroke: #b08900; stroke-width: 2; rx: 14; ry: 14; }
+      .arrow { stroke: #486581; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
+      .goodarrow { stroke: #2f855a; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead-green); }
+      .note { fill: #eef7ff; stroke: #7aa5d2; stroke-width: 1.5; rx: 10; ry: 10; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#486581"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#2f855a"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="46" class="title">INCR con due thread: automa globale safe</text>
+  <text x="40" y="74" class="small">Notazione stato: (T1, T2, counter, lock). Il lock serializza la sottosequenza critica.</text>
+
+  <rect x="40" y="120" width="270" height="96" class="node"/>
+  <text x="60" y="152" class="label">S0</text>
+  <text x="60" y="180" class="small">(Idle, Idle, 10, free)</text>
+  <text x="60" y="202" class="small">Nessun thread nel blocco critico</text>
+
+  <rect x="380" y="120" width="280" height="96" class="node"/>
+  <text x="400" y="152" class="label">S1</text>
+  <text x="400" y="180" class="small">(Locked+Read(10), Idle, 10, T1)</text>
+  <text x="400" y="202" class="small">T1 entra nella sezione critica</text>
+
+  <rect x="730" y="120" width="280" height="96" class="blocked"/>
+  <text x="750" y="152" class="label">S2</text>
+  <text x="750" y="180" class="small">(Locked+Read(10), Waiting, 10, T1)</text>
+  <text x="750" y="202" class="small">T2 prova a entrare ma resta in attesa</text>
+
+  <rect x="1080" y="120" width="200" height="96" class="node"/>
+  <text x="1100" y="152" class="label">S3</text>
+  <text x="1100" y="180" class="small">(Done, Idle, 11, free)</text>
+  <text x="1100" y="202" class="small">T1 rilascia il lock</text>
+
+  <rect x="730" y="320" width="280" height="96" class="node"/>
+  <text x="750" y="352" class="label">S4</text>
+  <text x="750" y="380" class="small">(Done, Locked+Read(11), 11, T2)</text>
+  <text x="750" y="402" class="small">T2 entra dopo il rilascio</text>
+
+  <rect x="1080" y="320" width="200" height="96" class="good"/>
+  <text x="1100" y="352" class="label">Sgood</text>
+  <text x="1100" y="380" class="small">(Done, Done, 12, free)</text>
+  <text x="1100" y="402" class="small">Finale corretto</text>
+
+  <rect x="380" y="320" width="280" height="96" class="node"/>
+  <text x="400" y="352" class="label">S1'</text>
+  <text x="400" y="380" class="small">(Idle, Locked+Read(10), 10, T2)</text>
+  <text x="400" y="402" class="small">Percorso simmetrico con T2</text>
+
+  <path d="M310 170 L380 170" class="arrow"/>
+  <text x="322" y="158" class="small">T1: acquire+read</text>
+
+  <path d="M660 170 L730 170" class="arrow"/>
+  <text x="670" y="158" class="small">T2: tries acquire</text>
+
+  <path d="M1010 170 L1080 170" class="arrow"/>
+  <text x="1020" y="158" class="small">T1: write+release</text>
+
+  <path d="M1180 216 C1180 264, 870 272, 870 320" class="arrow"/>
+  <text x="1020" y="278" class="small">T2 entra e legge 11</text>
+
+  <path d="M1010 370 L1080 370" class="goodarrow"/>
+  <text x="1016" y="358" class="small">T2: write 12 + release</text>
+
+  <path d="M310 170 C340 170, 340 370, 380 370" class="arrow"/>
+  <text x="212" y="280" class="small">Percorso simmetrico: T2 parte per primo</text>
+
+  <rect x="40" y="540" width="1240" height="180" class="note"/>
+  <text x="60" y="572" class="label">Lettura del grafo</text>
+  <text x="60" y="602" class="small">1. Lo stato "entrambi hanno letto 10" non e' raggiungibile: il lock elimina quel nodo dallo spazio degli stati.</text>
+  <text x="60" y="630" class="small">2. T2 puo' esistere come thread concorrente, ma durante la sezione critica di T1 e' al piu' in attesa di ingresso.</text>
+  <text x="60" y="658" class="small">3. La safety e' preservata: due INCR concorrenti portano a counter = 12.</text>
+  <text x="60" y="686" class="small">4. Costo introdotto: minore parallelismo sul path critico, quindi possibile impatto su tempi di attesa e throughput.</text>
+</svg>

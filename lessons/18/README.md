@@ -22,4 +22,6 @@ Alla fine dell'esercitazione dovresti saper:
 - formalizzare un contratto osservabile prima di implementarlo;
 - difendere la semantica di `GETV`, `CAS` e `REBALANCE`;
 - costruire test che colpiscano le finestre critiche del sistema;
+- confrontare architetture di soluzione e motivare quella scelta;
+- pianificare tempi di sviluppo e verifica in modo realistico;
 - motivare i trade-off tra semplicità di implementazione e forza del contratto.

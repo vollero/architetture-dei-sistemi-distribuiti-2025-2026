@@ -21,4 +21,6 @@ Alla fine della lezione dovresti saper:
 - motivare il significato di `GETV` e `CAS`;
 - leggere il `version_mismatch` come esito di contratto e non come semplice errore;
 - discutere versioni come parte dell'interfaccia osservabile;
+- confrontare diverse implementazioni di `CAS` e i loro costi;
+- ragionare su retry, backoff e gestione dei conflitti lato client;
 - collegare il tema a migrazione, replica e conflitti.

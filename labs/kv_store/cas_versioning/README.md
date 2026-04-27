@@ -51,3 +51,45 @@ Aspettativa:
 - una versione e' parte dell'interfaccia o solo un dettaglio interno?
 - che cosa promette davvero un `ERR version_mismatch`?
 - come si trasporterebbe questa semantica in uno store replicato o shardato?
+
+## Discussione implementativa
+
+La soluzione del lab e' intenzionalmente semplice:
+
+- ogni chiave e' rappresentata come coppia `(value, version)`;
+- `SET` incrementa sempre la versione;
+- `CAS` esegue controllo e update dentro la stessa sezione critica.
+
+Questo modello e' ottimo come baseline, ma va capito per quello che e':
+
+- corretto su nodo singolo;
+- facile da verificare;
+- non ancora ottimizzato per alta contesa.
+
+## Alternative da discutere
+
+- lock globale su tutto lo store: semplice, ma piu' serializzante;
+- lock per chiave: stessa semantica, ma piu' parallelismo;
+- primitive atomiche delegate a uno storage sottostante: meno logica nel server applicativo.
+
+## Tempi e costi
+
+Per il client, `CAS` costa piu' di `SET` perche' in generale richiede:
+
+- una lettura `GETV`;
+- una scrittura condizionale `CAS`;
+- eventuali retry in caso di conflitto.
+
+Quindi il costo cresce con:
+
+- frequenza dei conflitti;
+- latenza di rete;
+- numero di retry necessari;
+- qualita' della strategia di backoff del client.
+
+## Punti delicati
+
+- decidere il significato della versione `-1` per chiave assente;
+- chiarire l'effetto di `DELETE` sulla storia della chiave;
+- evitare retry ciechi che ripetano la stessa `CAS` con versione stantia;
+- distinguere mismatch semantico da errore tecnico.

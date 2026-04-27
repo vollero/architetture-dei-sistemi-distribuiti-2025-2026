@@ -23,3 +23,51 @@ Non basta che il codice "funzioni". Dovete poter dire:
 - che cosa promette il sistema;
 - in quali finestre non lo promette;
 - come avete verificato tali promesse.
+
+## Scelte di progetto che dovete esplicitare
+
+L'esercitazione lascia intenzionalmente aperte alcune decisioni. Non sono buchi
+del testo: fanno parte del lavoro.
+
+### Dove vive la versione
+
+Possibili opzioni:
+
+- nello shard che possiede la chiave;
+- nel router;
+- in metadata trasferiti insieme alla chiave durante il rebalance.
+
+Qualunque scelta facciate, dovete spiegare:
+
+- chi e' autorevole sulla versione corrente;
+- come si evita di perderla o resettarla in migrazione.
+
+### Quando il nuovo routing diventa vincolante
+
+Possibili contratti:
+
+- subito dopo `ADD_SHARD`;
+- solo dopo `REBALANCE`;
+- in due fasi, con una finestra dichiarata di transizione.
+
+Questa decisione cambia direttamente il significato osservabile di `WHERE`,
+`GET`, `GETV` e `CAS`.
+
+### Come gestire una `CAS` durante migrazione
+
+Almeno tre possibilita':
+
+- bloccarla temporaneamente;
+- inoltrarla dove la chiave risiede davvero;
+- permetterla solo dopo che la migrazione e' dichiarata conclusa.
+
+Non esiste una risposta obbligata, ma deve esserci una risposta coerente.
+
+## Criterio di accettazione implicito
+
+Una soluzione e' accettabile se:
+
+- il contratto e' chiaro;
+- il comportamento del codice lo rispetta;
+- i test mostrano i casi nominali e almeno una finestra critica;
+- i limiti residui sono dichiarati invece che nascosti.

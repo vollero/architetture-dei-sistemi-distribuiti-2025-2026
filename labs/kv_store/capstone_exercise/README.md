@@ -86,3 +86,50 @@ Dovete decidere e difendere:
 - esiste una finestra in cui `WHERE` cambia ma il dato non e' ancora arrivato?
 - come dovrebbe comportarsi il sistema in quella finestra?
 - quali test difendono davvero il contratto?
+
+## Strategie implementative da confrontare
+
+### Router piu' ricco
+
+- il router gestisce topologia, migrazione e inoltro delle operazioni versionate;
+- gli shard custodiscono lo stato della chiave;
+- il rebalance trasferisce valore e versione insieme.
+
+Pregio:
+
+- controllo centrale del flusso.
+
+Costo:
+
+- router piu' complesso e piu' delicato.
+
+### Shard piu' autonomi
+
+- `GETV` e `CAS` vengono gestiti direttamente dagli shard;
+- il router si occupa soprattutto di scegliere dove inviare l'operazione;
+- la migrazione deve preservare integralmente lo stato della chiave.
+
+Pregio:
+
+- migliore separazione delle responsabilita'.
+
+Costo:
+
+- protocollo di migrazione piu' importante.
+
+## Pianificazione consigliata
+
+Una timeline pragmatica per il lavoro potrebbe essere:
+
+1. fissare il contratto di `GETV`, `CAS` e `REBALANCE`;
+2. implementare il trasporto di `(value, version)` tra shard;
+3. definire il comportamento di `CAS` durante la migrazione;
+4. costruire test di successo, conflitto e post-migrazione;
+5. scrivere una nota tecnica finale sui limiti residui.
+
+## Problemi tipici
+
+- perdere la versione durante lo spostamento;
+- far passare una `CAS` usando una versione letta prima della migrazione senza averne deciso la semantica;
+- far dire a `WHERE` piu' di quanto il sistema sappia davvero garantire;
+- avere test che verificano solo il caso felice.

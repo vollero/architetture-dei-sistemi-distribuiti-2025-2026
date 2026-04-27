@@ -19,5 +19,7 @@ Alla fine della lezione dovresti saper:
 - distinguere routing teorico e posizione reale dei dati;
 - spiegare perche' aggiungere uno shard rompe l'assunzione di localita';
 - discutere una migrazione come protocollo, non come copia banale;
+- confrontare strategie implementative diverse per la migrazione delle chiavi;
+- stimare costi, tempi e finestre di rischio del rebalance;
 - individuare le finestre di incoerenza durante il rebalance;
 - collegare il tema alla membership dinamica.

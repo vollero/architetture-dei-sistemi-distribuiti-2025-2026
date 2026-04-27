@@ -48,3 +48,61 @@ contratto del sistema deve esplicitare se:
 
 - il routing nuovo diventa immediatamente vincolante;
 - oppure esiste una finestra di migrazione.
+
+## Semantiche possibili durante migrazione
+
+La lezione discute almeno quattro famiglie di contratto:
+
+### 1. Cutover immediato
+
+- il router usa subito la nuova topologia;
+- fino a `REBALANCE` completato, alcune `GET` possono restituire `NOT_FOUND`
+  anche per chiavi esistenti.
+
+Pregio:
+
+- implementazione semplice.
+
+Costo:
+
+- continuita' semantica debole.
+
+### 2. Freeze temporaneo
+
+- durante la migrazione alcune operazioni vengono rifiutate o sospese;
+- il nuovo routing diventa visibile solo a riallineamento completato.
+
+Pregio:
+
+- comportamento piu' pulito.
+
+Costo:
+
+- disponibilita' ridotta.
+
+### 3. Forwarding o doppia consultazione
+
+- il router o lo shard sorgente sanno ancora dove cercare la chiave durante il transitorio;
+- una lettura puo' essere servita dal vecchio shard anche se il target teorico e' gia' cambiato.
+
+Pregio:
+
+- meno `NOT_FOUND` spurii.
+
+Costo:
+
+- metadata e protocollo piu' complessi.
+
+### 4. Copy, catch-up, cutover
+
+- si copia il bulk dei dati;
+- si catturano le scritture concorrenti;
+- il nuovo routing diventa autorevole solo al termine del cutover.
+
+Pregio:
+
+- semantica piu' forte.
+
+Costo:
+
+- maggiore complessita' implementativa.

@@ -71,3 +71,51 @@ dei dati scritti prima.
   dati sono stati migrati?
 - il router puo' rispondere correttamente durante una migrazione parziale?
 - come cambierebbe il problema con chiavi molto grandi o traffico concorrente?
+
+## Discussione implementativa
+
+La versione del lab e' volutamente minima:
+
+- il router esegue `LIST_ITEMS` su ogni shard;
+- ricalcola il target di ogni chiave;
+- per ogni chiave da spostare fa `IMPORT_KEY` e poi `DELETE_LOCAL`.
+
+Questo protocollo e' utile perche' e' leggibile, ma non e' una soluzione
+generale.
+
+### Pregi
+
+- semplice da spiegare e debuggare;
+- copia prima di cancellare;
+- espone chiaramente la finestra di incoerenza.
+
+### Limiti
+
+- migrazione sequenziale;
+- nessun batching;
+- nessun metadata di stato della migrazione;
+- nessuna gestione delle scritture concorrenti;
+- nessun resume in caso di crash del router.
+
+## Tempi e costi
+
+In prima approssimazione, il costo del rebalance e' dato da:
+
+- una scansione completa di tutti gli shard;
+- due RPC per ogni chiave migrata.
+
+Quindi il tempo cresce soprattutto con:
+
+- numero di chiavi da migrare;
+- dimensione media dei valori;
+- latenza delle RPC;
+- carico concorrente presente durante la migrazione.
+
+## Soluzioni da confrontare
+
+Per la discussione in aula conviene mettere a confronto almeno queste opzioni:
+
+- `stop-the-world`: blocco temporaneo delle scritture durante la migrazione;
+- `forwarding`: il vecchio shard o il router reindirizzano temporaneamente le letture;
+- `dual mapping`: vecchia e nuova mappa valide insieme per una finestra;
+- `copy + catch-up + cutover`: copia iniziale, recupero scritture concorrenti, commutazione finale.

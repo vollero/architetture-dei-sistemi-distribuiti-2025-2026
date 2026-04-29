@@ -8,6 +8,9 @@ Gli studenti devono combinare:
 - topologia che cambia;
 - scritture condizionali basate su versione.
 
+Il lab contiene anche una soluzione di riferimento eseguibile, da usare come
+baseline per discutere contratto, limiti e possibili evoluzioni.
+
 ## Materiale
 
 - [Handout dell'esercitazione](./handout.md)
@@ -21,6 +24,7 @@ Alla fine dell'esercitazione dovresti saper:
 
 - formalizzare un contratto osservabile prima di implementarlo;
 - difendere la semantica di `GETV`, `CAS` e `REBALANCE`;
+- leggere criticamente una soluzione completa e riconoscerne i limiti;
 - costruire test che colpiscano le finestre critiche del sistema;
 - confrontare architetture di soluzione e motivare quella scelta;
 - pianificare tempi di sviluppo e verifica in modo realistico;

@@ -10,6 +10,10 @@ L'esercitazione obbliga a mettere insieme piu' strati del percorso:
 - scritture condizionali;
 - test.
 
+Il laboratorio associato contiene una soluzione di riferimento completa ma
+deliberatamente conservativa. Va letta come oggetto di discussione: mostra un
+contratto coerente, ma lascia aperte alternative piu' robuste.
+
 ## Regola di fondo
 
 Prima del codice dovete produrre una specifica breve ma esplicita:
@@ -17,6 +21,14 @@ Prima del codice dovete produrre una specifica breve ma esplicita:
 1. interfaccia proposta;
 2. contratto osservabile;
 3. casi critici da testare.
+
+La reference implementation inclusa nella cartella del lab segue questa
+specifica minima:
+
+- `ADD_SHARD` cambia subito il routing teorico;
+- prima di `REBALANCE`, alcune chiavi possono risultare temporaneamente non trovate;
+- `REBALANCE` serializza le operazioni del router e migra valore e versione insieme;
+- dopo `REBALANCE`, `GETV` e `CAS` lavorano sul nuovo shard senza perdere la storia della chiave.
 
 ## Milestone suggerite
 

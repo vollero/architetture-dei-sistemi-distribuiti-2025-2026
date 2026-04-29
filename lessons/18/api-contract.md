@@ -29,6 +29,17 @@ Non basta che il codice "funzioni". Dovete poter dire:
 L'esercitazione lascia intenzionalmente aperte alcune decisioni. Non sono buchi
 del testo: fanno parte del lavoro.
 
+La soluzione di riferimento del lab adotta una scelta precisa:
+
+- versione per chiave conservata nello shard;
+- router responsabile di routing e migrazione;
+- `ADD_SHARD` visibile subito;
+- `REBALANCE` stop-the-world rispetto alle operazioni del router;
+- migrazione copy-before-delete di `(value, version)`.
+
+Questa scelta non e' l'unica possibile, ma e' abbastanza piccola da essere
+analizzabile in aula.
+
 ### Dove vive la versione
 
 Possibili opzioni:

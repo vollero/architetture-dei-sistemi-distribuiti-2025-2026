@@ -178,3 +178,56 @@ Hint:
 In Paxos, un numero di proposta piu' alto permette di proseguire, ma obbliga a
 preservare il valore gia' accettato con proposal number piu' alto tra le promise
 ricevute.
+
+## Scenario 9: Verifica dell'invariante di Paxos
+
+Consideriamo tre acceptor:
+
+```text
+A1, A2, A3
+```
+
+e quorum di maggioranza:
+
+```text
+{A1,A2}, {A1,A3}, {A2,A3}
+```
+
+Stato iniziale:
+
+```text
+accepted[A1] = none
+accepted[A2] = none
+accepted[A3] = none
+```
+
+Dopo alcune transizioni:
+
+```text
+accepted[A1] = ((1,P1), v1)
+accepted[A2] = ((1,P1), v1)
+accepted[A3] = none
+```
+
+Domande:
+
+- `v1` e' scelto secondo la definizione formale?
+- un proposer `P2` con proposta `(2,P2)` puo' scegliere `v2`?
+- quale informazione deve ricevere da almeno un acceptor?
+- quale invariante impedisce di scegliere `v2`?
+
+Hint:
+
+Usare la definizione:
+
+```text
+chosen(v) iff exists quorum q:
+  for every a in q:
+    accepted[a] = (n, v)
+```
+
+e la proprieta':
+
+```text
+ogni quorum successivo interseca il quorum che ha scelto v1
+```

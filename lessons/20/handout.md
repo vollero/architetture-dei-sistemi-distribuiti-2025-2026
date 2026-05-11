@@ -316,6 +316,9 @@ Esempi di valori da scegliere:
 Paxos non serve a leggere l'ora.
 Serve a far convergere piu' nodi sulla stessa decisione.
 
+La descrizione completa, con modello, stato formale, invarianti e argomento di
+correttezza, e' in [Approfondimento su Paxos](./paxos.md).
+
 ## Ruoli in Paxos
 
 La descrizione classica distingue tre ruoli.
@@ -323,16 +326,44 @@ La descrizione classica distingue tre ruoli.
 ### Proposer
 
 Propone un valore.
+Deve usare un proposal number unico e ordinabile.
 
 ### Acceptor
 
 Vota secondo regole precise.
 La safety di Paxos dipende dagli acceptor e dai quorum.
+Ogni acceptor conserva:
+
+```text
+promised_n
+accepted_n
+accepted_value
+```
 
 ### Learner
 
 Scopre quale valore e' stato scelto.
 In molti esempi didattici, proposer e learner coincidono.
+
+## Specifica desiderata di Paxos
+
+Paxos deve garantire almeno queste proprieta':
+
+### Validity
+
+Solo un valore proposto puo' essere scelto.
+
+### Agreement
+
+Non possono essere scelti due valori diversi.
+
+### Learnability
+
+Se un learner corretto apprende una decisione, deve apprendere il valore scelto.
+
+La proprieta' piu' importante per questa lezione e' `Agreement`.
+E' quella che impedisce split brain logici, doppie configurazioni e due entry
+diverse nella stessa posizione di log.
 
 ## Quorum
 
@@ -359,6 +390,15 @@ due quorum di maggioranza si intersecano sempre
 Questa intersezione e' cio' che impedisce a due valori diversi di essere scelti
 indipendentemente.
 
+Formalmente, se `Q` e' l'insieme dei quorum:
+
+```text
+for every q1, q2 in Q:
+  q1 intersection q2 != empty
+```
+
+Questa proprieta' e' la base dell'argomento di correttezza.
+
 ## Numeri di proposta
 
 Ogni proposta ha un numero crescente e unico.
@@ -378,6 +418,15 @@ Regola pratica:
 - un acceptor puo' promettere di non accettare piu' proposte minori di una certa proposta;
 - un proposer con numero piu' alto puo' superare proposer precedenti;
 - ma non puo' ignorare valori gia' accettati.
+
+In forma astratta:
+
+```text
+proposal_number = (round, proposer_id)
+```
+
+L'ordine e' lessicografico. Il `proposer_id` serve a rendere unici numeri con lo
+stesso round.
 
 ## Fase 1: Prepare / Promise
 
@@ -444,6 +493,16 @@ nuovo quorum sceglie v2
 Paxos lo impedisce perche' i quorum si intersecano.
 Nel quorum del nuovo proposer ci sara' almeno un acceptor che conosce `v1`.
 Quel valore deve essere riproposto.
+
+Il punto formale e':
+
+```text
+se v e' stato scelto da un quorum q,
+ogni quorum successivo q' interseca q
+```
+
+Quindi una proposta successiva deve poter incontrare memoria del valore
+precedente. La fase `PROMISE` serve esattamente a trasportare questa memoria.
 
 ## Safety e liveness di Paxos
 

@@ -136,6 +136,43 @@ Limite:
 
 - Paxos base garantisce safety, ma la liveness pratica richiede condizioni di stabilita', per esempio un leader che non venga continuamente disturbato.
 
+Formalizzazione minima:
+
+```text
+A = insieme degli acceptor
+Q = insieme dei quorum
+N = insieme dei proposal number
+V = insieme dei valori
+```
+
+Per ogni acceptor `a`:
+
+```text
+promised[a] in N or none
+accepted[a] in (N x V) or none
+```
+
+Un valore `v` e' scelto se:
+
+```text
+exists n, exists q in Q:
+  for every a in q:
+    accepted[a] = (n, v)
+```
+
+Invarianti richiesti:
+
+- `promised[a]` e' monotono e non diminuisce mai;
+- un acceptor accetta `(n,v)` solo se non ha promesso un proposal number maggiore di `n`;
+- un proposer che riceve promise da un quorum deve riproporre il valore con massimo `accepted_n` tra quelli ricevuti, se esiste;
+- ogni coppia di quorum deve avere intersezione non vuota.
+
+Da questi invarianti si sostiene la proprieta' di agreement:
+
+```text
+non possono essere scelti due valori diversi
+```
+
 ## Contratti temporali utili
 
 Un sistema distribuito puo' promettere cose diverse.
@@ -194,6 +231,8 @@ Nel caso di Paxos single-decree:
 - `PROMISE(n, last_accepted)` restituisce eventuale valore gia' accettato;
 - `ACCEPT(n, value)` chiede di accettare il valore scelto dal proposer;
 - un quorum di `ACCEPTED` sceglie il valore.
+ 
+La specifica completa e' nell'approfondimento [Paxos single-decree](./paxos.md).
 
 ## Collegamento con i laboratori precedenti
 
@@ -204,7 +243,7 @@ I clock logici aiutano a discutere:
 - debug di interleaving multithread o distribuiti;
 - causal delivery dei messaggi;
 - mutua esclusione distribuita;
-- ricostruzione di una storia plausibile dai log.
+- ricostruzione di una storia plausibile dai log;
 - consenso su leader, configurazioni e posizioni di log.
 
 ## Punto chiave

@@ -11,6 +11,7 @@ meccanismi puo' usare per costruire un ordine utile.
 - [Handout tecnico](./handout.md)
 - [Contratto e modelli temporali](./api-contract.md)
 - [Scenari di discussione](./scenarios.md)
+- [Approfondimento su Paxos](./paxos.md)
 - [Lab sui clock logici](../../labs/logical_clocks/README.md)
 - [Slide della lezione](../../slides/20-logical-clocks.pdf)
 

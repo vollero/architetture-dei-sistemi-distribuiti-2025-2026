@@ -116,6 +116,26 @@ Limite:
 - serve conoscere o gestire l'insieme dei processi;
 - piu' complesso da usare in sistemi dinamici.
 
+### Consenso con Paxos
+
+Paxos non e' un clock, ma entra naturalmente nella discussione perche' risponde
+a una domanda piu' forte dell'ordinamento:
+
+```text
+quale valore decidono insieme i nodi?
+```
+
+Contratto essenziale:
+
+- tra piu' valori proposti, al massimo un valore puo' essere scelto;
+- un valore e' scelto quando viene accettato da un quorum di acceptor;
+- proposer concorrenti devono rispettare valori gia' accettati da quorum precedenti o potenziali;
+- proposal number piu' alti possono superare proposte vecchie, ma non possono violare la safety.
+
+Limite:
+
+- Paxos base garantisce safety, ma la liveness pratica richiede condizioni di stabilita', per esempio un leader che non venga continuamente disturbato.
+
 ## Contratti temporali utili
 
 Un sistema distribuito puo' promettere cose diverse.
@@ -153,6 +173,28 @@ questi due eventi non sono ordinabili causalmente
 
 Questo richiede clock vettoriali o metadata equivalenti.
 
+### Contratto 5: decisione condivisa
+
+Il sistema deve scegliere un solo valore tra piu' proposte concorrenti.
+
+Esempio:
+
+```text
+leader = node2
+log[17] = SET x 1
+cluster_config = C2
+```
+
+Questo non e' garantito da un clock logico. Richiede consenso, quorum e regole
+che impediscano a due valori diversi di essere scelti.
+
+Nel caso di Paxos single-decree:
+
+- `PREPARE(n)` chiede agli acceptor di promettere che non accetteranno proposte minori;
+- `PROMISE(n, last_accepted)` restituisce eventuale valore gia' accettato;
+- `ACCEPT(n, value)` chiede di accettare il valore scelto dal proposer;
+- un quorum di `ACCEPTED` sceglie il valore.
+
 ## Collegamento con i laboratori precedenti
 
 I clock logici aiutano a discutere:
@@ -163,6 +205,7 @@ I clock logici aiutano a discutere:
 - causal delivery dei messaggi;
 - mutua esclusione distribuita;
 - ricostruzione di una storia plausibile dai log.
+- consenso su leader, configurazioni e posizioni di log.
 
 ## Punto chiave
 
@@ -177,4 +220,3 @@ Ogni timestamp risponde a una domanda precisa:
 
 Se il contratto non dice quale domanda il timestamp sta rispondendo, il sistema
 sta esponendo un dato ambiguo.
-

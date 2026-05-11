@@ -273,6 +273,248 @@ Costo:
 - latenza maggiore;
 - comportamento piu' complesso in caso di partizioni.
 
+## Perche' i clock non bastano sempre
+
+I clock logici rispondono a domande di ordine:
+
+- questo evento puo' aver causato quello?
+- possiamo imporre un ordine totale deterministico?
+- due eventi sono concorrenti?
+
+Ma ci sono casi in cui il problema non e' solo ordinare eventi.
+
+Esempio:
+
+```text
+Replica A vuole scegliere: primary = node1
+Replica B vuole scegliere: primary = node2
+Replica C riceve messaggi in ordine diverso
+```
+
+Qui serve che il sistema scelga un solo valore condiviso.
+
+Un timestamp puo' aiutare a ordinare le proposte, ma non basta da solo a
+garantire che due gruppi diversi di nodi non decidano valori diversi.
+
+Questa e' la motivazione del consenso.
+
+## Paxos: problema risolto
+
+Paxos risolve il problema del consenso single-decree:
+
+> un insieme di nodi deve scegliere un solo valore, anche se alcuni messaggi
+> arrivano in ritardo, alcuni proposer competono e alcuni nodi possono non
+> rispondere.
+
+Esempi di valori da scegliere:
+
+- chi e' il leader;
+- quale comando entra nella prossima posizione del log;
+- quale configurazione del cluster e' valida;
+- quale valore viene deciso per una chiave in un conflitto.
+
+Paxos non serve a leggere l'ora.
+Serve a far convergere piu' nodi sulla stessa decisione.
+
+## Ruoli in Paxos
+
+La descrizione classica distingue tre ruoli.
+
+### Proposer
+
+Propone un valore.
+
+### Acceptor
+
+Vota secondo regole precise.
+La safety di Paxos dipende dagli acceptor e dai quorum.
+
+### Learner
+
+Scopre quale valore e' stato scelto.
+In molti esempi didattici, proposer e learner coincidono.
+
+## Quorum
+
+Paxos usa quorum di maggioranza.
+
+Con `N=3` acceptor:
+
+```text
+quorum = 2
+```
+
+Con `N=5`:
+
+```text
+quorum = 3
+```
+
+La proprieta' fondamentale e':
+
+```text
+due quorum di maggioranza si intersecano sempre
+```
+
+Questa intersezione e' cio' che impedisce a due valori diversi di essere scelti
+indipendentemente.
+
+## Numeri di proposta
+
+Ogni proposta ha un numero crescente e unico.
+
+Esempio:
+
+```text
+(round=7, proposer=P2)
+```
+
+Il numero di proposta non e' un clock fisico.
+E' un identificatore ordinabile che permette agli acceptor di distinguere
+proposte vecchie e nuove.
+
+Regola pratica:
+
+- un acceptor puo' promettere di non accettare piu' proposte minori di una certa proposta;
+- un proposer con numero piu' alto puo' superare proposer precedenti;
+- ma non puo' ignorare valori gia' accettati.
+
+## Fase 1: Prepare / Promise
+
+Il proposer invia:
+
+```text
+PREPARE(n)
+```
+
+agli acceptor.
+
+Un acceptor risponde con:
+
+```text
+PROMISE(n, last_accepted)
+```
+
+se non ha gia' promesso di ignorare proposte fino a un numero maggiore.
+
+La promessa significa:
+
+```text
+non accettero' proposte con numero minore di n
+```
+
+Se l'acceptor aveva gia' accettato un valore, lo comunica.
+
+## Fase 2: Accept / Accepted
+
+Se il proposer riceve promise da un quorum, sceglie il valore da mandare in
+fase 2.
+
+Regola cruciale:
+
+- se nessun acceptor del quorum aveva gia' accettato valori, il proposer puo'
+  proporre il proprio valore;
+- se qualcuno aveva gia' accettato un valore, il proposer deve riproporre il
+  valore associato alla proposta accettata con numero piu' alto.
+
+Poi invia:
+
+```text
+ACCEPT(n, value)
+```
+
+Un acceptor accetta se non ha promesso una proposta piu' alta.
+
+Quando un valore e' accettato da un quorum, e' scelto.
+
+## Perche' questa regola e' necessaria
+
+Supponiamo che un valore `v1` sia gia' stato accettato da un quorum, ma il
+proposer che lo aveva proposto si fermi prima di comunicarlo a tutti.
+
+Un nuovo proposer arriva con numero piu' alto e vuole proporre `v2`.
+
+Se potesse ignorare la storia precedente, il sistema rischierebbe due decisioni:
+
+```text
+quorum precedente sceglie v1
+nuovo quorum sceglie v2
+```
+
+Paxos lo impedisce perche' i quorum si intersecano.
+Nel quorum del nuovo proposer ci sara' almeno un acceptor che conosce `v1`.
+Quel valore deve essere riproposto.
+
+## Safety e liveness di Paxos
+
+### Safety
+
+La proprieta' centrale e':
+
+```text
+non possono essere scelti due valori diversi
+```
+
+Questa proprieta' deve valere anche con:
+
+- proposer concorrenti;
+- messaggi ritardati;
+- retry;
+- acceptor che rispondono solo a una parte dei messaggi.
+
+### Liveness
+
+Paxos base non garantisce progresso in qualunque schedulazione.
+
+Se due proposer competono continuamente con numeri crescenti, possono disturbarsi
+a vicenda.
+
+Per ottenere progresso pratico, spesso si introduce un leader stabile:
+
+- un proposer principale;
+- meno competizione;
+- Multi-Paxos per decidere molte posizioni di log.
+
+## Paxos e clock logici
+
+Il collegamento con la prima parte della lezione e':
+
+- Lamport clock ordina eventi rispetto alla causalita';
+- ordine totale con Lamport impone una sequenza deterministica;
+- Paxos fa decidere a piu' nodi quale valore entra in una posizione condivisa.
+
+In altre parole:
+
+```text
+clock logico: quale ordine posso rappresentare?
+Paxos: quale valore possiamo decidere insieme?
+```
+
+Sono problemi collegati, ma non equivalenti.
+
+## Esempio da eseguire
+
+Il laboratorio contiene:
+
+```bash
+python3 labs/logical_clocks/paxos_single_decree.py
+```
+
+Lo script mostra:
+
+- tre acceptor;
+- quorum di due;
+- due proposer concorrenti;
+- un primo valore gia' accettato;
+- un secondo proposer che deve conservare quel valore.
+
+Il punto da osservare:
+
+```text
+un proposer con numero piu' alto non puo' scegliere liberamente un valore nuovo
+se scopre che un valore precedente potrebbe gia' essere stato scelto.
+```
+
 ## Scelte implementative
 
 Per dare temporalita' certa a eventi e azioni bisogna chiarire prima la domanda.
@@ -297,6 +539,10 @@ Usare vector clock.
 
 Usare clock fisici sincronizzati, dichiarando l'incertezza.
 
+### Voglio una decisione condivisa resistente a proposer concorrenti
+
+Usare un protocollo di consenso, per esempio Paxos.
+
 ## Domande da portare in aula
 
 1. Se due eventi hanno timestamp fisico diverso, siamo sicuri del loro ordine causale?
@@ -304,6 +550,8 @@ Usare clock fisici sincronizzati, dichiarando l'incertezza.
 3. Quando e' accettabile imporre un ordine totale artificiale?
 4. Che cosa succede se un nodo riceve un messaggio con timestamp logico molto piu' alto?
 5. Quando il costo dei vector clock e' giustificato?
+6. Quando un ordine totale non basta e serve consenso?
+7. Perche' Paxos costringe un proposer a riproporre un valore gia' accettato?
 
 ## Collegamento con il KV store
 
@@ -314,7 +562,9 @@ Nel KV store i clock possono essere usati per:
 - decidere una regola deterministicamente condivisa di conflitto;
 - annotare log distribuiti;
 - ricostruire una storia plausibile durante il debugging;
-- implementare causal read o causal delivery.
+- implementare causal read o causal delivery;
+- scegliere un leader;
+- decidere la prossima entry di un log replicato.
 
 Esempio:
 
@@ -337,7 +587,8 @@ E' un contratto:
 - tempo fisico per scadenze e misure;
 - tempo logico per causalita';
 - ordine totale per decidere;
-- vector clock per riconoscere concorrenza.
+- vector clock per riconoscere concorrenza;
+- consenso per scegliere un valore condiviso.
 
 La domanda progettuale corretta non e':
 
@@ -350,4 +601,3 @@ ma:
 ```text
 quale proprieta' temporale voglio promettere?
 ```
-

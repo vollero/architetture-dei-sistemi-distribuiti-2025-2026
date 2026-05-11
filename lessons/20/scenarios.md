@@ -130,3 +130,51 @@ Hint:
 Per debug distribuito serve poter ricostruire relazioni di causalita' tra eventi
 di processi diversi. Il timestamp fisico aiuta, ma puo' non bastare.
 
+## Scenario 7: Due nodi vogliono diventare leader
+
+Tre acceptor devono decidere quale nodo sara' leader.
+
+Due proposer inviano quasi contemporaneamente:
+
+```text
+P1 propone leader=A
+P2 propone leader=B
+```
+
+Domande:
+
+- un Lamport timestamp basta per decidere in modo sicuro?
+- cosa succede se P1 raggiunge gli acceptor `A1` e `A2`, mentre P2 raggiunge `A2` e `A3`?
+- perche' e' importante che due quorum si intersechino?
+- quale informazione deve restituire un acceptor nella fase `PROMISE`?
+
+Hint:
+
+Questa e' la motivazione di Paxos: non vogliamo solo ordinare proposte, vogliamo
+impedire che due valori diversi vengano scelti da due quorum.
+
+## Scenario 8: Proposer con numero piu' alto
+
+Un proposer `P1` ha gia' ottenuto accept per:
+
+```text
+proposal=(1,P1), value=SET x=1
+```
+
+Poi arriva `P2` con:
+
+```text
+proposal=(2,P2), value=SET x=2
+```
+
+Domande:
+
+- P2 puo' scegliere liberamente `SET x=2` solo perche' ha proposal number piu' alto?
+- cosa deve fare se scopre che un acceptor aveva gia' accettato `SET x=1`?
+- quale proprieta' di safety si romperebbe se P2 ignorasse quel valore?
+
+Hint:
+
+In Paxos, un numero di proposta piu' alto permette di proseguire, ma obbliga a
+preservare il valore gia' accettato con proposal number piu' alto tra le promise
+ricevute.

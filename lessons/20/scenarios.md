@@ -1,233 +1,117 @@
-# Scenari di Discussione: Clock Logici e Sincronizzazione
+# Scenari di Discussione: REST e ACID nel KV Store
 
-Questi scenari sono pensati per essere discussi in aula prima di mostrare una
-soluzione completa.
+## Scenario 1: `PUT` ripetuta
 
-## Scenario 1: Log che sembrano impossibili
+Un client invia due volte:
 
-Due nodi producono questi log:
-
-```text
-A 10:00:00.200 send m to B
-B 10:00:00.100 receive m from A
+```http
+PUT /kv/course
+{"value": "ads"}
 ```
 
 Domande:
 
-- il messaggio e' stato ricevuto prima di essere inviato?
-- quale assunzione sui clock fisici e' stata violata?
-- un clock di Lamport risolverebbe il problema?
-- quale informazione perdiamo usando solo Lamport?
+- `PUT` dovrebbe essere idempotente?
+- se la versione aumenta due volte, la richiesta e' davvero idempotente?
+- la versione fa parte dello stato osservabile della risorsa?
+- il gateway dovrebbe evitare update inutili quando il valore e' identico?
 
 Hint:
 
-Il clock fisico locale serve per osservabilita' umana, ma non garantisce
-causalita' se non conosciamo un limite all'errore tra clock.
+L'idempotenza va definita rispetto allo stato della risorsa osservabile. Se la
+versione e' esposta al client, anche la versione conta.
 
-## Scenario 2: Due scritture concorrenti sul KV store
+## Scenario 2: `CAS` via `PATCH`
 
-Due client inviano update a repliche diverse:
+Due client leggono:
 
 ```text
-Client 1 -> Replica A: SET x 1
-Client 2 -> Replica B: SET x 2
+GET /kv/x -> version=4
 ```
 
-Non c'e' comunicazione tra i due eventi prima della replica successiva.
+Poi entrambi inviano:
 
-Domande:
-
-- possiamo dire quale update e' avvenuto prima?
-- un ordine totale con `(lamport_time, node_id)` puo' scegliere un vincitore?
-- scegliere un vincitore significa aver dimostrato causalita'?
-- quando sarebbe meglio conservare entrambi i valori come conflitto?
-
-Hint:
-
-Lamport puo' fornire un ordine deterministicamente condiviso. I vector clock
-possono dire che i due update sono concorrenti.
-
-## Scenario 3: Causal delivery
-
-Un processo `A` invia un messaggio `m1` a `B`.
-Poi, dopo aver ricevuto una risposta, invia `m2` a `C`.
-
-Domande:
-
-- quali eventi sono causalmente ordinati?
-- cosa deve garantire un sistema di causal delivery?
-- quale metadata serve allegare ai messaggi?
-
-Hint:
-
-Lamport clock puo' rispettare l'ordine causale, ma non basta sempre per decidere
-quali messaggi devono essere consegnati prima se si vuole rilevare concorrenza.
-
-## Scenario 4: Mutua esclusione distribuita
-
-Tre processi vogliono entrare in una sezione critica distribuita.
-Ogni richiesta viene timestampata con:
-
-```text
-(lamport_time, process_id)
+```http
+PATCH /kv/x
+{"expected_version": 4, "value": "..."}
 ```
 
 Domande:
 
-- perche' serve un ordine totale?
-- cosa succede se due richieste hanno lo stesso Lamport time?
-- cosa garantisce il tie-breaker sul process id?
-- quali messaggi servono per sapere che la propria richiesta e' la prima?
+- quale risposta deve ricevere il primo?
+- quale risposta deve ricevere il secondo?
+- perche' `409 Conflict` e' piu' adatto di `500 Internal Server Error`?
+- quale proprieta' ACID stiamo cercando di difendere?
 
 Hint:
 
-Questo e' il punto di partenza dell'algoritmo di Ricart-Agrawala: richiesta
-timestampata, risposte dagli altri processi, ingresso solo quando la richiesta e'
-la prima nell'ordine noto.
+`version_mismatch` e' un conflitto applicativo previsto dal contratto, non un
+errore interno del server.
 
-## Scenario 5: Lease e tempo fisico
+## Scenario 3: `REBALANCE` come risorsa REST
 
-Un primary ha un lease valido fino a:
+Un client invia:
 
-```text
-12:00:10.000
-```
-
-Un secondary vede scadere il lease e si promuove.
-
-Domande:
-
-- quali assunzioni servono sugli orologi?
-- quanto deve essere lungo il lease rispetto all'errore massimo di sincronizzazione?
-- cosa succede se il primary ha un clock indietro?
-- un clock logico puo' sostituire completamente il tempo fisico in questo caso?
-
-Hint:
-
-I lease richiedono una nozione di tempo reale. I clock logici ordinano eventi,
-ma non misurano durate reali.
-
-## Scenario 6: Debug di una capstone fallita
-
-Durante la capstone, un gruppo osserva:
-
-```text
-GETV alpha -> OK two version=1 shard=S2
-CAS alpha 1 three -> ERR version_mismatch current=2
-```
-
-Ma nei log del client sembra che nessun altro abbia scritto `alpha`.
-
-Domande:
-
-- quali log bisogna raccogliere?
-- un timestamp fisico basta?
-- un Lamport timestamp sui messaggi router-shard aiuterebbe?
-- un vector clock sarebbe eccessivo o utile?
-
-Hint:
-
-Per debug distribuito serve poter ricostruire relazioni di causalita' tra eventi
-di processi diversi. Il timestamp fisico aiuta, ma puo' non bastare.
-
-## Scenario 7: Due nodi vogliono diventare leader
-
-Tre acceptor devono decidere quale nodo sara' leader.
-
-Due proposer inviano quasi contemporaneamente:
-
-```text
-P1 propone leader=A
-P2 propone leader=B
+```http
+POST /cluster/rebalance
 ```
 
 Domande:
 
-- un Lamport timestamp basta per decidere in modo sicuro?
-- cosa succede se P1 raggiunge gli acceptor `A1` e `A2`, mentre P2 raggiunge `A2` e `A3`?
-- perche' e' importante che due quorum si intersechino?
-- quale informazione deve restituire un acceptor nella fase `PROMISE`?
+- `REBALANCE` e' una risorsa o un comando?
+- perche' usiamo `POST` e non `PUT`?
+- la risposta dovrebbe essere `200`, `202` o `204`?
+- cosa succede se il rebalance richiede molto tempo?
 
 Hint:
 
-Questa e' la motivazione di Paxos: non vogliamo solo ordinare proposte, vogliamo
-impedire che due valori diversi vengano scelti da due quorum.
-
-## Scenario 8: Proposer con numero piu' alto
-
-Un proposer `P1` ha gia' ottenuto accept per:
+Nel lab il rebalance e' sincrono ma lo esponiamo come procedura amministrativa.
+In un sistema reale potrebbe diventare un job con risorsa propria:
 
 ```text
-proposal=(1,P1), value=SET x=1
+/cluster/rebalance-jobs/{id}
 ```
 
-Poi arriva `P2` con:
+## Scenario 4: ACID su una chiave o su piu' chiavi
+
+Un client vuole trasferire valore da `a` a `b`:
 
 ```text
-proposal=(2,P2), value=SET x=2
+GET a
+GET b
+PUT a
+PUT b
 ```
 
 Domande:
 
-- P2 puo' scegliere liberamente `SET x=2` solo perche' ha proposal number piu' alto?
-- cosa deve fare se scopre che un acceptor aveva gia' accettato `SET x=1`?
-- quale proprieta' di safety si romperebbe se P2 ignorasse quel valore?
+- il gateway REST garantisce atomicita' dell'intera sequenza?
+- cosa succede se il processo cade dopo `PUT a` e prima di `PUT b`?
+- quale protocollo servirebbe per rendere l'operazione atomica su due chiavi?
 
 Hint:
 
-In Paxos, un numero di proposta piu' alto permette di proseguire, ma obbliga a
-preservare il valore gia' accettato con proposal number piu' alto tra le promise
-ricevute.
+ACID su una singola operazione non implica ACID su una sequenza.
+Per transazioni multi-key servono log, lock, 2PC, consenso o un transaction manager.
 
-## Scenario 9: Verifica dell'invariante di Paxos
+## Scenario 5: Durability dichiarata male
 
-Consideriamo tre acceptor:
-
-```text
-A1, A2, A3
-```
-
-e quorum di maggioranza:
+La documentazione dice:
 
 ```text
-{A1,A2}, {A1,A3}, {A2,A3}
+PUT /kv/key e' durable
 ```
 
-Stato iniziale:
-
-```text
-accepted[A1] = none
-accepted[A2] = none
-accepted[A3] = none
-```
-
-Dopo alcune transizioni:
-
-```text
-accepted[A1] = ((1,P1), v1)
-accepted[A2] = ((1,P1), v1)
-accepted[A3] = none
-```
+ma gli shard salvano solo in memoria.
 
 Domande:
 
-- `v1` e' scelto secondo la definizione formale?
-- un proposer `P2` con proposta `(2,P2)` puo' scegliere `v2`?
-- quale informazione deve ricevere da almeno un acceptor?
-- quale invariante impedisce di scegliere `v2`?
+- quale parte del contratto e' falsa?
+- quali guasti non sono coperti?
+- cosa servirebbe aggiungere per rendere vera la promessa?
 
 Hint:
 
-Usare la definizione:
+Durability richiede storage stabile o replica con recovery. Una risposta HTTP
+`200 OK` non rende durable una scrittura.
 
-```text
-chosen(v) iff exists quorum q:
-  for every a in q:
-    accepted[a] = (n, v)
-```
-
-e la proprieta':
-
-```text
-ogni quorum successivo interseca il quorum che ha scelto v1
-```

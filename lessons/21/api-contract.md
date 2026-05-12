@@ -1,0 +1,261 @@
+# Contratto Temporale: Eventi, Ordine e Clock Logici
+
+Questa lezione tratta la temporalita' come parte del contratto di un sistema
+distribuito.
+
+## Problema
+
+In un sistema distribuito non esiste, in generale, un orologio globale affidabile
+e immediatamente osservabile da tutti i nodi.
+
+Ogni nodo puo' avere:
+
+- un clock fisico locale;
+- una latenza diversa verso gli altri nodi;
+- messaggi in transito;
+- eventi concorrenti non ordinabili causalmente.
+
+Quindi una domanda apparentemente semplice:
+
+```text
+quale evento e' avvenuto prima?
+```
+
+puo' avere risposte diverse a seconda del modello temporale adottato.
+
+## Modelli possibili
+
+### Tempo fisico locale
+
+Ogni nodo usa il proprio orologio.
+
+Pregio:
+
+- semplice;
+- vicino all'intuizione umana;
+- utile per log e timeout.
+
+Limite:
+
+- clock skew;
+- clock drift;
+- l'orologio puo' andare avanti con velocita' leggermente diverse;
+- l'ordine fisico osservato nei log puo' contraddire la causalita' reale.
+
+### Tempo fisico sincronizzato
+
+I nodi cercano di allineare i clock tramite meccanismi come NTP, PTP o servizi
+di tempo controllati.
+
+Pregio:
+
+- utile per timestamp reali, audit, scadenze e misure di latenza.
+
+Limite:
+
+- la sincronizzazione non e' perfetta;
+- bisogna ragionare con intervalli di incertezza;
+- non basta per dedurre sempre causalita'.
+
+### Clock logico di Lamport
+
+Ogni nodo mantiene un contatore logico.
+
+Regole:
+
+1. prima di ogni evento locale, incrementa il contatore;
+2. ogni messaggio porta il timestamp logico del mittente;
+3. alla ricezione, il nodo aggiorna:
+
+```text
+clock = max(clock_locale, clock_ricevuto) + 1
+```
+
+Garanzia:
+
+```text
+se a happened-before b, allora L(a) < L(b)
+```
+
+Limite:
+
+```text
+L(a) < L(b) non implica necessariamente a happened-before b
+```
+
+### Ordine totale con Lamport
+
+Si puo' ottenere un ordine totale ordinando le coppie:
+
+```text
+(lamport_time, process_id)
+```
+
+Pregio:
+
+- ogni evento ha una posizione ordinabile;
+- utile per code distribuite, log merge, mutual exclusion.
+
+Limite:
+
+- l'ordine totale puo' ordinare artificialmente eventi concorrenti;
+- non dimostra causalita'.
+
+### Clock vettoriale
+
+Ogni nodo mantiene un vettore con una componente per processo.
+
+Pregio:
+
+- permette di distinguere causalita' e concorrenza;
+- se due vettori non sono confrontabili, gli eventi sono concorrenti.
+
+Limite:
+
+- metadata piu' grandi;
+- serve conoscere o gestire l'insieme dei processi;
+- piu' complesso da usare in sistemi dinamici.
+
+### Consenso con Paxos
+
+Paxos non e' un clock, ma entra naturalmente nella discussione perche' risponde
+a una domanda piu' forte dell'ordinamento:
+
+```text
+quale valore decidono insieme i nodi?
+```
+
+Contratto essenziale:
+
+- tra piu' valori proposti, al massimo un valore puo' essere scelto;
+- un valore e' scelto quando viene accettato da un quorum di acceptor;
+- proposer concorrenti devono rispettare valori gia' accettati da quorum precedenti o potenziali;
+- proposal number piu' alti possono superare proposte vecchie, ma non possono violare la safety.
+
+Limite:
+
+- Paxos base garantisce safety, ma la liveness pratica richiede condizioni di stabilita', per esempio un leader che non venga continuamente disturbato.
+
+Formalizzazione minima:
+
+```text
+A = insieme degli acceptor
+Q = insieme dei quorum
+N = insieme dei proposal number
+V = insieme dei valori
+```
+
+Per ogni acceptor `a`:
+
+```text
+promised[a] in N or none
+accepted[a] in (N x V) or none
+```
+
+Un valore `v` e' scelto se:
+
+```text
+exists n, exists q in Q:
+  for every a in q:
+    accepted[a] = (n, v)
+```
+
+Invarianti richiesti:
+
+- `promised[a]` e' monotono e non diminuisce mai;
+- un acceptor accetta `(n,v)` solo se non ha promesso un proposal number maggiore di `n`;
+- un proposer che riceve promise da un quorum deve riproporre il valore con massimo `accepted_n` tra quelli ricevuti, se esiste;
+- ogni coppia di quorum deve avere intersezione non vuota.
+
+Da questi invarianti si sostiene la proprieta' di agreement:
+
+```text
+non possono essere scelti due valori diversi
+```
+
+## Contratti temporali utili
+
+Un sistema distribuito puo' promettere cose diverse.
+
+### Contratto 1: ordinamento locale
+
+Ogni nodo ordina correttamente i propri eventi locali.
+
+Esempio:
+
+```text
+eventi prodotti dallo stesso nodo hanno timestamp crescenti
+```
+
+### Contratto 2: causalita' sui messaggi
+
+Se un evento causa l'invio di un messaggio e la ricezione del messaggio causa un
+altro evento, il secondo evento deve avere timestamp logico maggiore.
+
+### Contratto 3: ordine totale riproducibile
+
+Tutti i nodi possono ordinare gli stessi eventi nello stesso modo usando:
+
+```text
+(lamport_time, process_id)
+```
+
+### Contratto 4: rilevazione della concorrenza
+
+Il sistema deve poter dire:
+
+```text
+questi due eventi non sono ordinabili causalmente
+```
+
+Questo richiede clock vettoriali o metadata equivalenti.
+
+### Contratto 5: decisione condivisa
+
+Il sistema deve scegliere un solo valore tra piu' proposte concorrenti.
+
+Esempio:
+
+```text
+leader = node2
+log[17] = SET x 1
+cluster_config = C2
+```
+
+Questo non e' garantito da un clock logico. Richiede consenso, quorum e regole
+che impediscano a due valori diversi di essere scelti.
+
+Nel caso di Paxos single-decree:
+
+- `PREPARE(n)` chiede agli acceptor di promettere che non accetteranno proposte minori;
+- `PROMISE(n, last_accepted)` restituisce eventuale valore gia' accettato;
+- `ACCEPT(n, value)` chiede di accettare il valore scelto dal proposer;
+- un quorum di `ACCEPTED` sceglie il valore.
+ 
+La specifica completa e' nell'approfondimento [Paxos single-decree](./paxos.md).
+
+## Collegamento con i laboratori precedenti
+
+I clock logici aiutano a discutere:
+
+- ordine degli update in replica;
+- conflitti tra scritture concorrenti;
+- debug di interleaving multithread o distribuiti;
+- causal delivery dei messaggi;
+- mutua esclusione distribuita;
+- ricostruzione di una storia plausibile dai log;
+- consenso su leader, configurazioni e posizioni di log.
+
+## Punto chiave
+
+Un timestamp non e' neutro.
+
+Ogni timestamp risponde a una domanda precisa:
+
+- "quando e' successo sul clock locale?"
+- "da cosa dipende causalmente?"
+- "in quale ordine totale lo vogliamo processare?"
+- "possiamo dimostrare che due eventi sono concorrenti?"
+
+Se il contratto non dice quale domanda il timestamp sta rispondendo, il sistema
+sta esponendo un dato ambiguo.

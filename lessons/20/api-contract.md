@@ -1,261 +1,196 @@
-# Contratto Temporale: Eventi, Ordine e Clock Logici
+# Contratto REST: KV Store Distribuito
 
-Questa lezione tratta la temporalita' come parte del contratto di un sistema
-distribuito.
+Questa lezione espone il KV store distribuito attraverso un gateway HTTP.
 
-## Problema
+Il gateway traduce richieste REST in comandi verso il router della capstone.
 
-In un sistema distribuito non esiste, in generale, un orologio globale affidabile
-e immediatamente osservabile da tutti i nodi.
+## Risorse
 
-Ogni nodo puo' avere:
-
-- un clock fisico locale;
-- una latenza diversa verso gli altri nodi;
-- messaggi in transito;
-- eventi concorrenti non ordinabili causalmente.
-
-Quindi una domanda apparentemente semplice:
+### Chiave
 
 ```text
-quale evento e' avvenuto prima?
+/kv/{key}
 ```
 
-puo' avere risposte diverse a seconda del modello temporale adottato.
+Rappresenta il valore associato a una chiave.
 
-## Modelli possibili
-
-### Tempo fisico locale
-
-Ogni nodo usa il proprio orologio.
-
-Pregio:
-
-- semplice;
-- vicino all'intuizione umana;
-- utile per log e timeout.
-
-Limite:
-
-- clock skew;
-- clock drift;
-- l'orologio puo' andare avanti con velocita' leggermente diverse;
-- l'ordine fisico osservato nei log puo' contraddire la causalita' reale.
-
-### Tempo fisico sincronizzato
-
-I nodi cercano di allineare i clock tramite meccanismi come NTP, PTP o servizi
-di tempo controllati.
-
-Pregio:
-
-- utile per timestamp reali, audit, scadenze e misure di latenza.
-
-Limite:
-
-- la sincronizzazione non e' perfetta;
-- bisogna ragionare con intervalli di incertezza;
-- non basta per dedurre sempre causalita'.
-
-### Clock logico di Lamport
-
-Ogni nodo mantiene un contatore logico.
-
-Regole:
-
-1. prima di ogni evento locale, incrementa il contatore;
-2. ogni messaggio porta il timestamp logico del mittente;
-3. alla ricezione, il nodo aggiorna:
+### Collezione delle chiavi
 
 ```text
-clock = max(clock_locale, clock_ricevuto) + 1
+/kv
 ```
 
-Garanzia:
+Rappresenta l'insieme osservabile delle chiavi.
+
+### Posizione della chiave
 
 ```text
-se a happened-before b, allora L(a) < L(b)
+/kv/{key}/location
 ```
 
-Limite:
+Rappresenta il target di routing corrente della chiave.
+
+### Cluster
 
 ```text
-L(a) < L(b) non implica necessariamente a happened-before b
+/cluster/status
+/cluster/shards
+/cluster/rebalance
 ```
 
-### Ordine totale con Lamport
+Rappresentano operazioni di osservazione e amministrazione della topologia.
 
-Si puo' ottenere un ordine totale ordinando le coppie:
+## Endpoints
 
-```text
-(lamport_time, process_id)
+| Metodo | Path | Semantica |
+| --- | --- | --- |
+| `GET` | `/health` | verifica raggiungibilita' del router |
+| `GET` | `/kv` | lista chiavi |
+| `GET` | `/kv/{key}` | legge valore e versione |
+| `PUT` | `/kv/{key}` | crea o sostituisce il valore |
+| `PATCH` | `/kv/{key}` | `CAS` tramite versione attesa |
+| `DELETE` | `/kv/{key}` | elimina la chiave |
+| `GET` | `/kv/{key}/location` | mostra il target di routing |
+| `GET` | `/cluster/status` | mostra gli shard noti al router |
+| `POST` | `/cluster/shards` | aggiunge uno shard |
+| `POST` | `/cluster/rebalance` | avvia il rebalance |
+
+## Rappresentazioni JSON
+
+### PUT
+
+```json
+{
+  "value": "distributed-systems"
+}
 ```
 
-Pregio:
+### PATCH con CAS
 
-- ogni evento ha una posizione ordinabile;
-- utile per code distribuite, log merge, mutual exclusion.
-
-Limite:
-
-- l'ordine totale puo' ordinare artificialmente eventi concorrenti;
-- non dimostra causalita'.
-
-### Clock vettoriale
-
-Ogni nodo mantiene un vettore con una componente per processo.
-
-Pregio:
-
-- permette di distinguere causalita' e concorrenza;
-- se due vettori non sono confrontabili, gli eventi sono concorrenti.
-
-Limite:
-
-- metadata piu' grandi;
-- serve conoscere o gestire l'insieme dei processi;
-- piu' complesso da usare in sistemi dinamici.
-
-### Consenso con Paxos
-
-Paxos non e' un clock, ma entra naturalmente nella discussione perche' risponde
-a una domanda piu' forte dell'ordinamento:
-
-```text
-quale valore decidono insieme i nodi?
+```json
+{
+  "expected_version": 3,
+  "value": "new-value"
+}
 ```
 
-Contratto essenziale:
+### Aggiunta shard
 
-- tra piu' valori proposti, al massimo un valore puo' essere scelto;
-- un valore e' scelto quando viene accettato da un quorum di acceptor;
-- proposer concorrenti devono rispettare valori gia' accettati da quorum precedenti o potenziali;
-- proposal number piu' alti possono superare proposte vecchie, ma non possono violare la safety.
-
-Limite:
-
-- Paxos base garantisce safety, ma la liveness pratica richiede condizioni di stabilita', per esempio un leader che non venga continuamente disturbato.
-
-Formalizzazione minima:
-
-```text
-A = insieme degli acceptor
-Q = insieme dei quorum
-N = insieme dei proposal number
-V = insieme dei valori
+```json
+{
+  "id": "S2",
+  "host": "127.0.0.1",
+  "port": 6463
+}
 ```
 
-Per ogni acceptor `a`:
+## Codici di stato
 
-```text
-promised[a] in N or none
-accepted[a] in (N x V) or none
-```
+| Codice | Uso |
+| --- | --- |
+| `200 OK` | lettura o update riuscito |
+| `201 Created` | risorsa creata o shard aggiunto |
+| `202 Accepted` | rebalance avviato e completato dal router didattico |
+| `204 No Content` | delete riuscita senza body |
+| `400 Bad Request` | JSON non valido o parametri mancanti |
+| `404 Not Found` | chiave assente o endpoint inesistente |
+| `409 Conflict` | `CAS` fallita per `version_mismatch` |
+| `502 Bad Gateway` | router o shard sottostante non raggiungibile |
 
-Un valore `v` e' scelto se:
+## Safety, idempotenza, cacheability
 
-```text
-exists n, exists q in Q:
-  for every a in q:
-    accepted[a] = (n, v)
-```
+### Safe
 
-Invarianti richiesti:
+Un metodo safe non dovrebbe modificare lo stato del sistema.
 
-- `promised[a]` e' monotono e non diminuisce mai;
-- un acceptor accetta `(n,v)` solo se non ha promesso un proposal number maggiore di `n`;
-- un proposer che riceve promise da un quorum deve riproporre il valore con massimo `accepted_n` tra quelli ricevuti, se esiste;
-- ogni coppia di quorum deve avere intersezione non vuota.
+Nel lab:
 
-Da questi invarianti si sostiene la proprieta' di agreement:
+- `GET /kv/{key}` e' safe rispetto al valore;
+- `GET /cluster/status` e' safe;
+- `GET /kv/{key}/location` e' safe.
 
-```text
-non possono essere scelti due valori diversi
-```
+Attenzione: anche richieste safe possono produrre log o metriche.
 
-## Contratti temporali utili
+### Idempotente
 
-Un sistema distribuito puo' promettere cose diverse.
+Un metodo idempotente puo' essere ripetuto piu' volte ottenendo lo stesso stato
+finale della risorsa.
 
-### Contratto 1: ordinamento locale
+Nel lab:
 
-Ogni nodo ordina correttamente i propri eventi locali.
+- `PUT /kv/{key}` e' trattato come sostituzione del valore;
+- `DELETE /kv/{key}` e' idempotente rispetto allo stato finale;
+- `PATCH /kv/{key}` con CAS non e' idempotente in senso generale, perche' la
+  versione attesa cambia dopo il successo.
 
-Esempio:
+Il gateway prova a evitare incrementi inutili di versione su `PUT` ripetuti con
+lo stesso valore, ma questa non e' una transazione distribuita forte.
 
-```text
-eventi prodotti dallo stesso nodo hanno timestamp crescenti
-```
+### Cacheability
 
-### Contratto 2: causalita' sui messaggi
+`GET` potrebbe essere cacheabile solo se il contratto definisce:
 
-Se un evento causa l'invio di un messaggio e la ricezione del messaggio causa un
-altro evento, il secondo evento deve avere timestamp logico maggiore.
+- validita' temporale;
+- invalidazione;
+- relazione tra cache e versioni.
 
-### Contratto 3: ordine totale riproducibile
+Nel lab non abilitiamo cache HTTP perche' il valore puo' cambiare rapidamente e
+il router puo' cambiare topologia.
 
-Tutti i nodi possono ordinare gli stessi eventi nello stesso modo usando:
+## ACID nel contesto del KV store
 
-```text
-(lamport_time, process_id)
-```
+### Atomicity
 
-### Contratto 4: rilevazione della concorrenza
+Una singola operazione deve riuscire completamente o non avere effetto visibile.
 
-Il sistema deve poter dire:
+Nel lab:
 
-```text
-questi due eventi non sono ordinabili causalmente
-```
+- `CAS` e' atomica sullo shard che possiede la chiave;
+- `REBALANCE` e' un protocollo composto e non va confuso con una transazione ACID globale.
 
-Questo richiede clock vettoriali o metadata equivalenti.
+### Consistency
 
-### Contratto 5: decisione condivisa
+Ogni operazione deve preservare invarianti dichiarati.
 
-Il sistema deve scegliere un solo valore tra piu' proposte concorrenti.
+Esempi:
 
-Esempio:
+- la versione cresce monotonicamente per chiave;
+- una `CAS` con versione stantia fallisce;
+- dopo `REBALANCE`, routing e posizione reale devono tornare coerenti.
 
-```text
-leader = node2
-log[17] = SET x 1
-cluster_config = C2
-```
+### Isolation
 
-Questo non e' garantito da un clock logico. Richiede consenso, quorum e regole
-che impediscano a due valori diversi di essere scelti.
+Operazioni concorrenti non devono osservare stati intermedi non previsti dal
+contratto.
 
-Nel caso di Paxos single-decree:
+Nel lab:
 
-- `PREPARE(n)` chiede agli acceptor di promettere che non accetteranno proposte minori;
-- `PROMISE(n, last_accepted)` restituisce eventuale valore gia' accettato;
-- `ACCEPT(n, value)` chiede di accettare il valore scelto dal proposer;
-- un quorum di `ACCEPTED` sceglie il valore.
- 
-La specifica completa e' nell'approfondimento [Paxos single-decree](./paxos.md).
+- `CAS` aiuta a gestire concorrenza sulla singola chiave;
+- non c'e' isolamento transazionale multi-key;
+- durante finestre di migrazione il contratto deve dichiarare cosa e' osservabile.
 
-## Collegamento con i laboratori precedenti
+### Durability
 
-I clock logici aiutano a discutere:
+Una scrittura confermata deve sopravvivere ai guasti previsti dal contratto.
 
-- ordine degli update in replica;
-- conflitti tra scritture concorrenti;
-- debug di interleaving multithread o distribuiti;
-- causal delivery dei messaggi;
-- mutua esclusione distribuita;
-- ricostruzione di una storia plausibile dai log;
-- consenso su leader, configurazioni e posizioni di log.
+Nel gateway REST della capstone:
+
+- la durabilita' su disco non e' garantita;
+- il valore resta in memoria degli shard;
+- per avere durability servirebbe integrare WAL, snapshot o replica persistente.
 
 ## Punto chiave
 
-Un timestamp non e' neutro.
+REST non rende automaticamente il sistema piu' corretto.
 
-Ogni timestamp risponde a una domanda precisa:
+REST rende pubblico un contratto.
 
-- "quando e' successo sul clock locale?"
-- "da cosa dipende causalmente?"
-- "in quale ordine totale lo vogliamo processare?"
-- "possiamo dimostrare che due eventi sono concorrenti?"
+ACID non e' un'etichetta da applicare all'intero sistema senza distinguere:
 
-Se il contratto non dice quale domanda il timestamp sta rispondendo, il sistema
-sta esponendo un dato ambiguo.
+- singola chiave;
+- singolo nodo;
+- replica;
+- migrazione;
+- transazione multi-key;
+- crash recovery.
+

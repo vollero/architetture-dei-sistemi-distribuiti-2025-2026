@@ -60,7 +60,7 @@ def main() -> None:
     print_event(b.local_event("after receive"))
     print()
     print("Garanzia: se evento1 happened-before evento2, allora L(evento1) < L(evento2).")
-    print("Limite: L(evento1) < L(evento2) non dimostra causalita'.")
+    print("Limite: L(evento1) < L(evento2) non dimostra causalità.")
 
 
 if __name__ == "__main__":

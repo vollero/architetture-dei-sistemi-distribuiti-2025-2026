@@ -1,261 +1,200 @@
-# Contratto Temporale: Eventi, Ordine e Clock Logici
+# Contratto: Sincronizzazione e Clock Logici
 
-Questa lezione tratta la temporalita' come parte del contratto di un sistema
-distribuito.
+## Domanda di contratto
 
-## Problema
+Ogni meccanismo temporale promette qualcosa di diverso.
 
-In un sistema distribuito non esiste, in generale, un orologio globale affidabile
-e immediatamente osservabile da tutti i nodi.
-
-Ogni nodo puo' avere:
-
-- un clock fisico locale;
-- una latenza diversa verso gli altri nodi;
-- messaggi in transito;
-- eventi concorrenti non ordinabili causalmente.
-
-Quindi una domanda apparentemente semplice:
+La domanda da porre non è:
 
 ```text
-quale evento e' avvenuto prima?
+che timestamp uso?
 ```
 
-puo' avere risposte diverse a seconda del modello temporale adottato.
-
-## Modelli possibili
-
-### Tempo fisico locale
-
-Ogni nodo usa il proprio orologio.
-
-Pregio:
-
-- semplice;
-- vicino all'intuizione umana;
-- utile per log e timeout.
-
-Limite:
-
-- clock skew;
-- clock drift;
-- l'orologio puo' andare avanti con velocita' leggermente diverse;
-- l'ordine fisico osservato nei log puo' contraddire la causalita' reale.
-
-### Tempo fisico sincronizzato
-
-I nodi cercano di allineare i clock tramite meccanismi come NTP, PTP o servizi
-di tempo controllati.
-
-Pregio:
-
-- utile per timestamp reali, audit, scadenze e misure di latenza.
-
-Limite:
-
-- la sincronizzazione non e' perfetta;
-- bisogna ragionare con intervalli di incertezza;
-- non basta per dedurre sempre causalita'.
-
-### Clock logico di Lamport
-
-Ogni nodo mantiene un contatore logico.
-
-Regole:
-
-1. prima di ogni evento locale, incrementa il contatore;
-2. ogni messaggio porta il timestamp logico del mittente;
-3. alla ricezione, il nodo aggiorna:
+ma:
 
 ```text
-clock = max(clock_locale, clock_ricevuto) + 1
+quale proprietà temporale prometto all'interfaccia?
 ```
 
-Garanzia:
+## Clock fisico locale
+
+Contratto:
 
 ```text
-se a happened-before b, allora L(a) < L(b)
+timestamp prodotto dal nodo locale
 ```
 
-Limite:
+Garantisce:
+
+- leggibilità operativa;
+- ordinamento approssimato nel log locale;
+- misure locali se usato correttamente.
+
+Non garantisce:
+
+- ordine globale;
+- causalità;
+- confronto sicuro tra nodi diversi.
+
+## Clock monotono
+
+Contratto:
 
 ```text
-L(a) < L(b) non implica necessariamente a happened-before b
+tempo locale non decrescente per misurare durate
 ```
 
-### Ordine totale con Lamport
+Uso:
 
-Si puo' ottenere un ordine totale ordinando le coppie:
+- timeout;
+- retry;
+- misure di latenza locale;
+- deadline interne.
+
+Non usare per:
+
+- timestamp civili;
+- audit;
+- confronto diretto tra nodi.
+
+## Clock sincronizzato
+
+Contratto:
 
 ```text
-(lamport_time, process_id)
+tempo reale dentro [t - epsilon, t + epsilon]
 ```
 
-Pregio:
+Garantisce solo se `epsilon` è noto e rispettato.
 
-- ogni evento ha una posizione ordinabile;
-- utile per code distribuite, log merge, mutual exclusion.
+Uso:
 
-Limite:
+- lease;
+- scadenze;
+- audit distribuito;
+- ordinamento fisico quando gli intervalli non si sovrappongono.
 
-- l'ordine totale puo' ordinare artificialmente eventi concorrenti;
-- non dimostra causalita'.
+## Happened-before
 
-### Clock vettoriale
-
-Ogni nodo mantiene un vettore con una componente per processo.
-
-Pregio:
-
-- permette di distinguere causalita' e concorrenza;
-- se due vettori non sono confrontabili, gli eventi sono concorrenti.
-
-Limite:
-
-- metadata piu' grandi;
-- serve conoscere o gestire l'insieme dei processi;
-- piu' complesso da usare in sistemi dinamici.
-
-### Consenso con Paxos
-
-Paxos non e' un clock, ma entra naturalmente nella discussione perche' risponde
-a una domanda piu' forte dell'ordinamento:
+Contratto:
 
 ```text
-quale valore decidono insieme i nodi?
+a -> b indica causalità dimostrabile
 ```
 
-Contratto essenziale:
+Deriva da:
 
-- tra piu' valori proposti, al massimo un valore puo' essere scelto;
-- un valore e' scelto quando viene accettato da un quorum di acceptor;
-- proposer concorrenti devono rispettare valori gia' accettati da quorum precedenti o potenziali;
-- proposal number piu' alti possono superare proposte vecchie, ma non possono violare la safety.
+- ordine locale;
+- invio prima della ricezione;
+- transitività.
 
-Limite:
+## Lamport clock
 
-- Paxos base garantisce safety, ma la liveness pratica richiede condizioni di stabilita', per esempio un leader che non venga continuamente disturbato.
-
-Formalizzazione minima:
+Contratto:
 
 ```text
-A = insieme degli acceptor
-Q = insieme dei quorum
-N = insieme dei proposal number
-V = insieme dei valori
+a -> b => L(a) < L(b)
 ```
 
-Per ogni acceptor `a`:
+Non promette:
 
 ```text
-promised[a] in N or none
-accepted[a] in (N x V) or none
+L(a) < L(b) => a -> b
 ```
 
-Un valore `v` e' scelto se:
+## Ordine totale Lamport
+
+Contratto:
 
 ```text
-exists n, exists q in Q:
-  for every a in q:
-    accepted[a] = (n, v)
+ordine deterministico su tutti gli eventi osservati
 ```
 
-Invarianti richiesti:
-
-- `promised[a]` e' monotono e non diminuisce mai;
-- un acceptor accetta `(n,v)` solo se non ha promesso un proposal number maggiore di `n`;
-- un proposer che riceve promise da un quorum deve riproporre il valore con massimo `accepted_n` tra quelli ricevuti, se esiste;
-- ogni coppia di quorum deve avere intersezione non vuota.
-
-Da questi invarianti si sostiene la proprieta' di agreement:
-
-```text
-non possono essere scelti due valori diversi
-```
-
-## Contratti temporali utili
-
-Un sistema distribuito puo' promettere cose diverse.
-
-### Contratto 1: ordinamento locale
-
-Ogni nodo ordina correttamente i propri eventi locali.
-
-Esempio:
-
-```text
-eventi prodotti dallo stesso nodo hanno timestamp crescenti
-```
-
-### Contratto 2: causalita' sui messaggi
-
-Se un evento causa l'invio di un messaggio e la ricezione del messaggio causa un
-altro evento, il secondo evento deve avere timestamp logico maggiore.
-
-### Contratto 3: ordine totale riproducibile
-
-Tutti i nodi possono ordinare gli stessi eventi nello stesso modo usando:
+Si ottiene con:
 
 ```text
 (lamport_time, process_id)
 ```
 
-### Contratto 4: rilevazione della concorrenza
+È utile per code distribuite, lock e merge deterministici.
+Non dimostra causalità.
 
-Il sistema deve poter dire:
+## Vector clock
 
-```text
-questi due eventi non sono ordinabili causalmente
-```
-
-Questo richiede clock vettoriali o metadata equivalenti.
-
-### Contratto 5: decisione condivisa
-
-Il sistema deve scegliere un solo valore tra piu' proposte concorrenti.
-
-Esempio:
+Contratto:
 
 ```text
-leader = node2
-log[17] = SET x 1
-cluster_config = C2
+distinguere causalità e concorrenza
 ```
 
-Questo non e' garantito da un clock logico. Richiede consenso, quorum e regole
-che impediscano a due valori diversi di essere scelti.
+Confronto:
 
-Nel caso di Paxos single-decree:
+```text
+V(a) < V(b)  =>  a happened-before b
+V(a) || V(b) =>  eventi concorrenti
+```
 
-- `PREPARE(n)` chiede agli acceptor di promettere che non accetteranno proposte minori;
-- `PROMISE(n, last_accepted)` restituisce eventuale valore gia' accettato;
-- `ACCEPT(n, value)` chiede di accettare il valore scelto dal proposer;
-- un quorum di `ACCEPTED` sceglie il valore.
- 
-La specifica completa e' nell'approfondimento [Paxos single-decree](./paxos.md).
+Costo:
 
-## Collegamento con i laboratori precedenti
+- metadata più grande;
+- membership da gestire;
+- confronto più costoso.
 
-I clock logici aiutano a discutere:
+## Causal delivery
 
-- ordine degli update in replica;
-- conflitti tra scritture concorrenti;
-- debug di interleaving multithread o distribuiti;
-- causal delivery dei messaggi;
-- mutua esclusione distribuita;
-- ricostruzione di una storia plausibile dai log;
-- consenso su leader, configurazioni e posizioni di log.
+Contratto:
 
-## Punto chiave
+```text
+receive(m) non implica deliver(m)
+```
 
-Un timestamp non e' neutro.
+Un messaggio viene consegnato all'applicazione solo quando le dipendenze causali
+sono già state consegnate.
 
-Ogni timestamp risponde a una domanda precisa:
+Nota: un vector clock generale conta anche eventi locali e aggiornamenti di
+stato. Il predicato seguente usa invece un vettore specializzato per messaggi,
+qui indicato come `MC(m)`.
 
-- "quando e' successo sul clock locale?"
-- "da cosa dipende causalmente?"
-- "in quale ordine totale lo vogliamo processare?"
-- "possiamo dimostrare che due eventi sono concorrenti?"
+Il nodo ricevente mantiene uno stato locale:
 
-Se il contratto non dice quale domanda il timestamp sta rispondendo, il sistema
-sta esponendo un dato ambiguo.
+```text
+delivered[k] = numero di messaggi inviati da k già consegnati
+               all'applicazione locale
+```
+
+`k` è un processo della membership, per esempio `A`, `B` o `C`.
+Questo contatore non rappresenta messaggi globalmente consegnati e non conta i
+messaggi solo ricevuti dalla rete.
+
+Nel predicato classico:
+
+```text
+MC(m)[s] = delivered[s] + 1
+```
+
+`=` è intenzionale: il messaggio deve essere esattamente il prossimo messaggio
+atteso dal mittente `s`.
+
+Una condizione più debole come:
+
+```text
+MC(m)[s] > delivered[s]
+```
+
+permetterebbe di saltare messaggi precedenti dello stesso mittente e romperebbe
+l'ordine locale del mittente.
+
+Se invece `VC(m)` è un vector clock completo degli eventi, il confronto con
+`delivered[s]` non è ben tipato: una componente può crescere per aggiornamenti
+locali che non sono messaggi consegnabili. In quel caso serve anche un sequence
+number per i messaggi, oppure gli aggiornamenti locali devono diventare entry
+del flusso consegnato.
+
+Nel KV store:
+
+```text
+receive replication message
+buffer if dependencies are missing
+deliver to replica logic
+apply update
+```

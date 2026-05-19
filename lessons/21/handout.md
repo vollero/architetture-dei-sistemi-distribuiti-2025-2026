@@ -1,175 +1,363 @@
-# Handout: Sincronizzazione, Temporalita' e Clock Logici
+# Handout: Sincronizzazione e Clock Logici
 
-## Perche' il tempo e' un problema distribuito
+## Il problema del tempo distribuito
 
-In un programma sequenziale siamo abituati a pensare che esista un "prima" e un
-"dopo" naturale.
+In un programma sequenziale l'ordine degli eventi è naturale.
 
-In un sistema distribuito questa intuizione si rompe:
+In un sistema distribuito:
 
 - ogni nodo esegue localmente;
-- i messaggi viaggiano con ritardi variabili;
-- gli orologi fisici non sono perfettamente sincronizzati;
+- i messaggi hanno latenza variabile;
+- non esiste un osservatore globale immediato;
+- i clock fisici non sono perfettamente allineati;
 - due eventi possono essere indipendenti.
 
-Il problema non e' solo sapere l'ora.
-
-Il problema e':
-
-> quale ordine possiamo affermare con certezza?
-
-## Scenario iniziale
-
-Due nodi, `A` e `B`.
+La domanda progettuale corretta non è solo:
 
 ```text
-A scrive x=1
-B legge x
+che ora era?
 ```
 
-Domanda:
+ma:
 
 ```text
-la lettura di B e' avvenuta prima o dopo la scrittura di A?
+quale relazione temporale posso promettere?
 ```
 
-Se `B` ha ricevuto un messaggio causato dalla scrittura di `A`, possiamo dire
-qualcosa.
+## Eventi e processi
 
-Se non esiste comunicazione tra i due eventi, l'ordine potrebbe essere solo una
-scelta artificiale.
+Consideriamo un sistema:
 
-## Tempo fisico locale
-
-Ogni nodo puo' fare:
-
-```python
-time.time()
+```text
+P = {p1, p2, ..., pn}
 ```
 
-e assegnare un timestamp agli eventi.
+Ogni processo produce eventi locali:
 
-Questo e' utile per:
+```text
+E_i = eventi del processo p_i
+```
 
-- logging;
+Gli eventi possono essere:
+
+- computazioni locali;
+- invii di messaggi;
+- ricezioni di messaggi;
+- letture o scritture di stato;
+- operazioni applicative, per esempio `SET x 1`.
+
+## Clock fisico locale
+
+Ogni nodo ha un orologio fisico locale.
+
+È utile per:
+
+- log leggibili da operatori;
 - timeout;
-- misure approssimate;
-- audit umano.
+- misure operative;
+- audit;
+- scadenze applicative.
 
-Ma non basta per stabilire causalita'.
-
-### Problema: clock skew
-
-Il clock di `A` puo' essere avanti rispetto al clock di `B`.
-
-Allora nei log potremmo vedere:
+Limite:
 
 ```text
-B: receive message at 10:00:00.100
-A: send message    at 10:00:00.200
+clock_A(t) != clock_B(t)
 ```
 
-Sembra che il messaggio sia stato ricevuto prima di essere inviato.
-Il problema non e' il messaggio: e' il modello temporale usato per leggerlo.
+Due nodi possono attribuire timestamp diversi allo stesso tempo reale.
+
+## Skew e drift
+
+### Clock skew
+
+Lo skew è la differenza tra due clock nello stesso istante reale.
+
+```text
+skew(A,B) = clock_A(real_time) - clock_B(real_time)
+```
+
+Esempio:
+
+```text
+clock_A = 10:00:00.200
+clock_B = 10:00:00.100
+skew = 100 ms
+```
+
+### Clock drift
+
+Il drift è la divergenza progressiva tra clock.
+Due oscillatori non avanzano esattamente alla stessa velocità.
+
+```text
+clock_A avanza leggermente più veloce di clock_B
+```
+
+Anche se due clock vengono sincronizzati ora, torneranno a divergere.
+
+## Precisione, accuratezza, risoluzione
+
+Tre termini da non confondere:
+
+- **risoluzione:** il più piccolo incremento osservabile dal clock;
+- **precisione:** quanto sono stabili e ripetibili le misure;
+- **accuratezza:** quanto il clock è vicino al tempo reale di riferimento.
+
+Un clock può avere alta risoluzione ma bassa accuratezza.
+
+Esempio:
+
+```text
+timestamp con nanosecondi, ma clock avanti di 2 secondi
+```
+
+## Clock wall-clock e clock monotono
+
+Un **wall-clock** rappresenta data e ora civile:
+
+```text
+2026-05-18 12:30:00
+```
+
+Può saltare avanti o indietro per sincronizzazione, correzioni manuali o cambi
+di configurazione.
+
+Un **clock monotono** non torna indietro.
+È adatto a misurare durate:
+
+```text
+start = monotonic()
+...
+elapsed = monotonic() - start
+```
+
+Regola pratica:
+
+- wall-clock per log e audit;
+- monotonic clock per timeout e misure di durata.
+
+## Log fisici apparentemente impossibili
+
+Scenario:
+
+```text
+A 10:00:00.200 send m to B
+B 10:00:00.100 receive m from A
+```
+
+Il messaggio non è stato ricevuto prima di essere inviato.
+
+Il problema è che i timestamp appartengono a clock locali diversi.
+
+Conclusione:
+
+```text
+timestamp fisico locale != prova di ordine globale
+```
 
 ## Sincronizzazione fisica
 
-Meccanismi come NTP e PTP cercano di ridurre la distanza tra gli orologi.
+Meccanismi come NTP e PTP riducono la distanza tra clock.
 
-Sono utili, ma non cancellano l'incertezza.
+NTP è comune in sistemi generali.
+PTP è usato quando serve maggiore accuratezza in reti e hardware compatibili.
 
-In pratica, una lettura del tempo fisico va interpretata come:
+Ma la sincronizzazione non produce un punto perfetto.
+Produce un intervallo di incertezza:
 
 ```text
-il tempo reale e' probabilmente dentro un intervallo
+tempo reale in [t - epsilon, t + epsilon]
 ```
 
-non come un punto matematicamente perfetto.
+Quindi due eventi sono sicuramente ordinabili solo se gli intervalli non si
+sovrappongono.
 
-Questo e' importante per:
+Esempio:
 
-- lease temporali;
-- timeout;
-- sistemi di lock basati su scadenza;
-- database che espongono timestamp reali;
-- sistemi di audit.
+```text
+e1 in [100, 110]
+e2 in [130, 140]
+=> e1 prima di e2
+```
+
+Caso ambiguo:
+
+```text
+e1 in [100, 130]
+e2 in [120, 150]
+=> intervalli sovrapposti, ordine reale non certo
+```
+
+## Timeout e lease
+
+Un timeout misura una durata locale.
+Va implementato con clock monotono.
+
+Un lease è un diritto valido fino a una scadenza temporale.
+È più delicato perché coinvolge clock di nodi diversi.
+
+Per progettare un lease bisogna dichiarare:
+
+- errore massimo di sincronizzazione;
+- durata del lease;
+- margine di sicurezza;
+- comportamento in caso di clock non affidabile.
+
+Regola:
+
+```text
+lease_duration >> clock_uncertainty + network_delay_bound_assumed
+```
+
+Se non è possibile sostenere queste assunzioni, il lease non è un contratto
+sicuro.
 
 ## Happened-before
 
-Lamport introduce una relazione causale, non fisica.
-
-Scriviamo:
+Lamport definisce una relazione causale:
 
 ```text
 a -> b
 ```
 
-per dire:
+Regole:
+
+1. se `a` e `b` sono eventi dello stesso processo e `a` precede `b`, allora `a -> b`;
+2. se `a` è l'invio di un messaggio e `b` è la ricezione dello stesso messaggio,
+   allora `a -> b`;
+3. la relazione è transitiva.
+
+Se non vale `a -> b` e non vale `b -> a`, gli eventi sono concorrenti:
 
 ```text
-a happened-before b
+a || b
 ```
+
+## Esempio happened-before
+
+```text
+A: write x=1
+A: send m to B
+B: receive m
+B: read x
+```
+
+Relazioni:
+
+```text
+write x=1 -> send m
+send m -> receive m
+receive m -> read x
+```
+
+Per transitività:
+
+```text
+write x=1 -> read x
+```
+
+## Clock di Lamport
+
+Un clock di Lamport assegna un intero agli eventi:
+
+```text
+L: eventi -> interi
+```
+
+Ogni processo mantiene un contatore.
 
 Regole:
 
-1. se `a` e `b` sono eventi dello stesso processo e `a` avviene prima localmente
-   di `b`, allora `a -> b`;
-2. se `a` e' l'invio di un messaggio e `b` e' la ricezione dello stesso messaggio,
-   allora `a -> b`;
-3. la relazione e' transitiva.
-
-Se non vale `a -> b` e non vale `b -> a`, allora `a` e `b` sono concorrenti.
-
-## Clock logico di Lamport
-
-Un clock di Lamport e' un contatore.
-
-Regole operative:
-
 ```text
-evento locale: clock = clock + 1
-send:          clock = clock + 1, allega clock al messaggio
-receive:       clock = max(clock_locale, clock_messaggio) + 1
+evento locale: L_i = L_i + 1
+send:          L_i = L_i + 1, allega L_i
+receive:       L_i = max(L_i, timestamp_messaggio) + 1
 ```
 
 Garanzia:
 
 ```text
-se a -> b, allora L(a) < L(b)
+a -> b  =>  L(a) < L(b)
 ```
-
-Questa e' una garanzia di consistenza causale dei timestamp.
 
 Limite:
 
 ```text
-L(a) < L(b) non implica a -> b
+L(a) < L(b)  non implica  a -> b
 ```
 
-Il clock di Lamport non distingue sempre causalita' e concorrenza.
-
-## Esempio ragionato
+## Esempio Lamport con messaggio
 
 ```text
-A: local event      L=1
-A: send m to B      L=2
-B: receive m        L=max(0,2)+1=3
-B: local event      L=4
+A local event      L=1
+A send m to B      L=2
+B local event      L=1
+B receive m        L=max(1,2)+1=3
+B local event      L=4
 ```
 
-Possiamo dire:
+Il receive ha timestamp maggiore del send.
+
+L'evento locale di `B` con `L=1` non è ordinabile causalmente rispetto
+all'evento locale di `A` con `L=1`.
+
+## Esempio Lamport con catena causale
 
 ```text
-A send m -> B receive m -> B local event
+A: e1 local              L=1
+A: send m1 to B          L=2
+B: receive m1            L=max(0,2)+1=3
+B: send m2 to C          L=4
+C: receive m2            L=max(0,4)+1=5
 ```
 
-Il clock cresce coerentemente con la causalita'.
+La catena:
+
+```text
+A.e1 -> A.send -> B.receive -> B.send -> C.receive
+```
+
+è rispettata da timestamp crescenti.
+
+Questo è l'uso corretto di Lamport: se la causalità esiste nel modello, il
+clock la rispetta numericamente.
+
+## Esempio Lamport: falso indizio di causalità
+
+```text
+A: SET x 1       L=5
+B: SET y 1       L=7
+```
+
+Da `5 < 7` non segue automaticamente:
+
+```text
+A.SET -> B.SET
+```
+
+Potrebbero essere eventi indipendenti. Lamport preserva causalità nota, ma non
+ricostruisce causalità non osservata.
+
+## Esempio Lamport con concorrenza
+
+```text
+A: SET x 1      L=1
+B: SET x 2      L=1
+```
+
+Se non esiste messaggio tra i due eventi:
+
+```text
+A_event || B_event
+```
+
+Lamport può imporre un ordine solo aggiungendo un tie-breaker.
 
 ## Ordine totale con Lamport
 
-Per alcuni algoritmi serve ordinare tutti gli eventi, anche quelli concorrenti.
+Per alcune applicazioni serve ordinare tutti gli eventi.
 
-Si puo' usare:
+Si usa:
 
 ```text
 (lamport_time, process_id)
@@ -178,485 +366,356 @@ Si puo' usare:
 Esempio:
 
 ```text
-(5, A) < (5, B)
+(1,A) < (1,B)
 ```
 
-se decidiamo che `A < B`.
+se `A < B`.
 
-Questo ordine e' utile, ma bisogna ricordare:
+Questo ordine è deterministico, ma può essere artificiale.
+Non dimostra causalità.
 
-- e' deterministico;
-- e' condivisibile da tutti;
-- non dimostra che l'evento di `A` abbia causato quello di `B`.
+## Esempio: mutua esclusione
+
+Tre processi chiedono una risorsa:
+
+```text
+B: request kv:x at L=1
+A: request kv:x at L=1
+C: request kv:x at L=1
+```
+
+Con tie-breaker:
+
+```text
+A < B < C
+```
+
+l'ordine comune è:
+
+```text
+(1,A) < (1,B) < (1,C)
+```
+
+Safety: non entrano due processi insieme nella sezione critica.
+
+Liveness: ogni richiesta corretta prima o poi entra, se i messaggi arrivano e i
+processi rispondono.
 
 ## Clock vettoriali
 
-I clock vettoriali estendono l'idea.
+I vector clock servono a distinguere causalità e concorrenza.
 
-Con tre processi:
+Prima si fissa una membership ordinata:
 
 ```text
-[clock_A, clock_B, clock_C]
+P = [A, B, C]
 ```
 
-Ogni processo incrementa la propria componente.
-Quando riceve un messaggio, fa il massimo componente per componente.
+Un vector clock ha una componente per processo:
 
-Con i vector clock possiamo distinguere:
+```text
+V(e) = [clock_A, clock_B, clock_C]
+```
 
-- `v1 < v2`: evento 1 happened-before evento 2;
-- `v2 < v1`: evento 2 happened-before evento 1;
-- vettori non confrontabili: eventi concorrenti.
+La componente `clock_A` parla degli eventi prodotti da `A`.
+Solo `A` incrementa direttamente quella componente.
 
-Costo:
+## Regole dei vector clock
 
-- piu' metadata;
-- serve conoscere i processi;
-- gestione piu' difficile con membership dinamica.
+Evento locale su `A`:
 
-## Forme di sincronizzazione sensate
+```text
+A increments clock_A
+```
 
-### Sincronizzazione fisica
+Send da `A`:
 
-Usare clock fisici allineati entro una certa incertezza.
+```text
+A increments clock_A
+A attaches vector clock to message
+```
 
-Ha senso per:
+Receive su `B`:
 
-- scadenze;
-- lease;
-- SLA;
-- audit;
-- timeout.
+```text
+B merges component-wise max
+B increments clock_B
+```
 
-### Sincronizzazione logica
+## Esempio vector clock
 
-Usare messaggi e contatori per rispettare causalita'.
+```text
+P = [A, B, C]
 
-Ha senso per:
+A local event:     [1,0,0]
+A sends m to B:    [2,0,0]
+B before receive:  [0,1,0]
 
-- logging distribuito;
-- causal delivery;
-- debug;
-- mutua esclusione distribuita;
-- ordinamento di update.
+B merges:          max([0,1,0], [2,0,0]) = [2,1,0]
+B receive event:   [2,2,0]
+```
 
-### Sincronizzazione tramite coordinatore
+Il vettore finale dice che `B` conosce due eventi di `A`, due eventi di `B` e
+nessun evento di `C`.
 
-Un nodo assegna sequenze o timestamp.
+## Esempio vector clock: causalità
 
-Ha senso per:
+```text
+a = [2,0,0]
+b = [2,2,0]
+```
 
-- ordine totale semplice;
-- sistemi piccoli;
-- prototipi didattici.
+`a <= b` componente per componente e almeno una componente cresce.
 
-Limite:
+Quindi:
 
-- collo di bottiglia;
-- single point of failure;
-- disponibilita' ridotta se il coordinatore non e' raggiungibile.
+```text
+a -> b
+```
 
-### Sincronizzazione tramite quorum o consenso
+Il vettore di `b` include la conoscenza rappresentata da `a`.
 
-Un insieme di nodi concorda l'ordine o la validita' di un evento.
+## Esempio vector clock: concorrenza
 
-Ha senso per:
+```text
+a = [1,0,0]
+b = [0,1,0]
+```
 
-- commit distribuiti;
-- log replicati;
-- elezione leader;
-- configurazioni critiche.
+Nessuno dei due vettori domina l'altro.
 
-Costo:
+Quindi:
 
-- piu' messaggi;
-- latenza maggiore;
-- comportamento piu' complesso in caso di partizioni.
+```text
+a || b
+```
 
-## Perche' i clock non bastano sempre
+Questa è informazione progettuale: l'applicazione può decidere di mostrare un
+conflitto, effettuare un merge oppure imporre un ordine artificiale.
 
-I clock logici rispondono a domande di ordine:
+## Confronto tra vector clock
 
-- questo evento puo' aver causato quello?
-- possiamo imporre un ordine totale deterministico?
-- due eventi sono concorrenti?
+```text
+V(a) <= V(b)
+```
 
-Ma ci sono casi in cui il problema non e' solo ordinare eventi.
+se ogni componente di `V(a)` è minore o uguale alla corrispondente componente di
+`V(b)`.
+
+```text
+V(a) < V(b)
+```
+
+se `V(a) <= V(b)` e almeno una componente è strettamente minore.
+
+Se né `V(a) < V(b)` né `V(b) < V(a)`, gli eventi sono concorrenti.
+
+## Causal delivery
+
+Causal delivery distingue:
+
+```text
+receive(m) = il nodo riceve il messaggio
+deliver(m) = il nodo lo rende visibile all'applicazione
+```
+
+Il layer può stare tra trasporto e applicazione:
+
+```text
+transport -> causal delivery -> application
+```
+
+Contratto:
+
+```text
+deliver solo quando le dipendenze causali sono soddisfatte
+```
+
+## Predicato di consegna
+
+Qui bisogna distinguere due concetti.
+
+Un vector clock generale:
+
+```text
+VC_event(e)
+```
+
+conta gli eventi del processo: computazioni locali, aggiornamenti di stato,
+send e receive.
+
+Il predicato semplice di causal delivery usato qui non usa direttamente quel
+vector clock generale. Usa un vettore specializzato di messaggi:
+
+```text
+MC(m)
+```
+
+dove `MC(m)[k]` conta i messaggi di `k` che sono causalmente noti al messaggio
+`m`.
+
+Questo evita di confondere:
+
+- eventi locali interni al processo;
+- messaggi che il receiver può consegnare all'applicazione;
+- dipendenze causali tra messaggi.
+
+Ogni nodo ricevente mantiene inoltre un vettore locale `delivered`.
+
+Se la membership è:
+
+```text
+P = [A, B, C]
+```
+
+allora:
+
+```text
+delivered = [delivered[A], delivered[B], delivered[C]]
+```
+
+`delivered[k]` significa:
+
+```text
+numero di messaggi inviati da k che questo nodo ha già consegnato
+all'applicazione
+```
+
+Non è uno stato globale.
+Non conta i messaggi soltanto ricevuti dalla rete.
+Conta solo i messaggi già resi visibili all'applicazione locale.
+
+Esempio dal punto di vista del nodo `C`:
+
+```text
+delivered[A] = 1  => C ha già consegnato 1 messaggio inviato da A
+delivered[B] = 0  => C non ha ancora consegnato messaggi inviati da B
+delivered[C] = 0  => C non conta messaggi propri consegnati da rete
+```
+
+Un messaggio `m` inviato da `s` con message vector `MC(m)` è consegnabile se:
+
+```text
+MC(m)[s] = delivered[s] + 1
+for every k != s:
+  MC(m)[k] <= delivered[k]
+```
+
+Se il predicato è falso, il messaggio resta in buffer.
+
+La prima condizione dice che `m` è il prossimo messaggio atteso dal mittente
+`s`.
+
+La seconda condizione dice che tutte le cause conosciute da `m`, prodotte dagli
+altri processi, sono già state consegnate localmente.
+
+### Perché `=` e non `>`
+
+In questo modello `MC(m)[s]` e `delivered[s]` parlano entrambi di messaggi del
+mittente `s`.
+
+Quindi:
+
+```text
+MC(m)[s] = delivered[s] + 1
+```
+
+significa:
+
+```text
+m è esattamente il prossimo messaggio atteso da s
+```
+
+Se usassimo:
+
+```text
+MC(m)[s] > delivered[s]
+```
+
+allora potremmo consegnare un messaggio più recente saltando un messaggio
+precedente dello stesso mittente.
+
+Esempio dal punto di vista di `C`:
+
+```text
+delivered[A] = 0
+m2 inviato da A ha MC(m2)[A] = 2
+```
+
+Con `>` la condizione sarebbe vera, ma `C` consegnerebbe `m2` senza aver
+consegnato `m1`.
+
+Questo violerebbe l'ordine locale di `A`, che è una relazione di
+happened-before:
+
+```text
+A sends m1 -> A sends m2
+```
+
+Se invece stiamo usando un vector clock generale `VC_event`, che conta anche
+aggiornamenti locali e computazioni interne, allora questo predicato non è
+applicabile così com'è.
 
 Esempio:
 
 ```text
-Replica A vuole scegliere: primary = node1
-Replica B vuole scegliere: primary = node2
-Replica C riceve messaggi in ordine diverso
+A local update      VC_event[A] = 1
+A sends m1          VC_event[A] = 2
 ```
 
-Qui serve che il sistema scelga un solo valore condiviso.
+`m1` può essere il primo messaggio di `A`, ma `VC_event(m1)[A] = 2`.
+Confrontarlo con `delivered[A] = 0` non dice che manchi un messaggio: dice che
+nel clock di A esiste anche un evento locale.
 
-Un timestamp puo' aiutare a ordinare le proposte, ma non basta da solo a
-garantire che due gruppi diversi di nodi non decidano valori diversi.
-
-Questa e' la motivazione del consenso.
-
-## Paxos: problema risolto
-
-Paxos risolve il problema del consenso single-decree:
-
-> un insieme di nodi deve scegliere un solo valore, anche se alcuni messaggi
-> arrivano in ritardo, alcuni proposer competono e alcuni nodi possono non
-> rispondere.
-
-Esempi di valori da scegliere:
-
-- chi e' il leader;
-- quale comando entra nella prossima posizione del log;
-- quale configurazione del cluster e' valida;
-- quale valore viene deciso per una chiave in un conflitto.
-
-Paxos non serve a leggere l'ora.
-Serve a far convergere piu' nodi sulla stessa decisione.
-
-La descrizione completa, con modello, stato formale, invarianti e argomento di
-correttezza, e' in [Approfondimento su Paxos](./paxos.md).
-
-## Ruoli in Paxos
-
-La descrizione classica distingue tre ruoli.
-
-### Proposer
-
-Propone un valore.
-Deve usare un proposal number unico e ordinabile.
-
-### Acceptor
-
-Vota secondo regole precise.
-La safety di Paxos dipende dagli acceptor e dai quorum.
-Ogni acceptor conserva:
+In quel caso servono due informazioni distinte:
 
 ```text
-promised_n
-accepted_n
-accepted_value
+VC_event(m)  = causalità tra eventi generali
+seq_s(m)     = numero progressivo dei messaggi inviati da s
 ```
 
-### Learner
+oppure bisogna modellare ogni aggiornamento locale rilevante come messaggio o
+entry del log da consegnare.
 
-Scopre quale valore e' stato scelto.
-In molti esempi didattici, proposer e learner coincidono.
+## Traccia di causal delivery
 
-## Specifica desiderata di Paxos
-
-Paxos deve garantire almeno queste proprieta':
-
-### Validity
-
-Solo un valore proposto puo' essere scelto.
-
-### Agreement
-
-Non possono essere scelti due valori diversi.
-
-### Learnability
-
-Se un learner corretto apprende una decisione, deve apprendere il valore scelto.
-
-La proprieta' piu' importante per questa lezione e' `Agreement`.
-E' quella che impedisce split brain logici, doppie configurazioni e due entry
-diverse nella stessa posizione di log.
-
-## Quorum
-
-Paxos usa quorum di maggioranza.
-
-Con `N=3` acceptor:
+Supponiamo tre nodi `A`, `B`, `C`.
 
 ```text
-quorum = 2
+m1: A pubblica x
+m2: B reagisce a x
 ```
 
-Con `N=5`:
+Se `C` riceve `m2` prima di `m1`, il layer di causal delivery non consegna
+subito `m2` all'applicazione.
 
 ```text
-quorum = 3
+receive(m2) -> buffer
+receive(m1) -> deliver(m1)
+buffer check -> deliver(m2)
 ```
 
-La proprieta' fondamentale e':
+Safety:
 
 ```text
-due quorum di maggioranza si intersecano sempre
+non consegnare una reazione prima della causa
 ```
 
-Questa intersezione e' cio' che impedisce a due valori diversi di essere scelti
-indipendentemente.
-
-Formalmente, se `Q` e' l'insieme dei quorum:
+Liveness:
 
 ```text
-for every q1, q2 in Q:
-  q1 intersection q2 != empty
+se le cause mancanti arrivano, il messaggio bufferizzato deve essere consegnato
 ```
 
-Questa proprieta' e' la base dell'argomento di correttezza.
-
-## Numeri di proposta
-
-Ogni proposta ha un numero crescente e unico.
-
-Esempio:
-
-```text
-(round=7, proposer=P2)
-```
-
-Il numero di proposta non e' un clock fisico.
-E' un identificatore ordinabile che permette agli acceptor di distinguere
-proposte vecchie e nuove.
-
-Regola pratica:
-
-- un acceptor puo' promettere di non accettare piu' proposte minori di una certa proposta;
-- un proposer con numero piu' alto puo' superare proposer precedenti;
-- ma non puo' ignorare valori gia' accettati.
-
-In forma astratta:
-
-```text
-proposal_number = (round, proposer_id)
-```
-
-L'ordine e' lessicografico. Il `proposer_id` serve a rendere unici numeri con lo
-stesso round.
-
-## Fase 1: Prepare / Promise
-
-Il proposer invia:
-
-```text
-PREPARE(n)
-```
-
-agli acceptor.
-
-Un acceptor risponde con:
-
-```text
-PROMISE(n, last_accepted)
-```
-
-se non ha gia' promesso di ignorare proposte fino a un numero maggiore.
-
-La promessa significa:
-
-```text
-non accettero' proposte con numero minore di n
-```
-
-Se l'acceptor aveva gia' accettato un valore, lo comunica.
-
-## Fase 2: Accept / Accepted
-
-Se il proposer riceve promise da un quorum, sceglie il valore da mandare in
-fase 2.
-
-Regola cruciale:
-
-- se nessun acceptor del quorum aveva gia' accettato valori, il proposer puo'
-  proporre il proprio valore;
-- se qualcuno aveva gia' accettato un valore, il proposer deve riproporre il
-  valore associato alla proposta accettata con numero piu' alto.
-
-Poi invia:
-
-```text
-ACCEPT(n, value)
-```
-
-Un acceptor accetta se non ha promesso una proposta piu' alta.
-
-Quando un valore e' accettato da un quorum, e' scelto.
-
-## Perche' questa regola e' necessaria
-
-Supponiamo che un valore `v1` sia gia' stato accettato da un quorum, ma il
-proposer che lo aveva proposto si fermi prima di comunicarlo a tutti.
-
-Un nuovo proposer arriva con numero piu' alto e vuole proporre `v2`.
-
-Se potesse ignorare la storia precedente, il sistema rischierebbe due decisioni:
-
-```text
-quorum precedente sceglie v1
-nuovo quorum sceglie v2
-```
-
-Paxos lo impedisce perche' i quorum si intersecano.
-Nel quorum del nuovo proposer ci sara' almeno un acceptor che conosce `v1`.
-Quel valore deve essere riproposto.
-
-Il punto formale e':
-
-```text
-se v e' stato scelto da un quorum q,
-ogni quorum successivo q' interseca q
-```
-
-Quindi una proposta successiva deve poter incontrare memoria del valore
-precedente. La fase `PROMISE` serve esattamente a trasportare questa memoria.
-
-## Safety e liveness di Paxos
-
-### Safety
-
-La proprieta' centrale e':
-
-```text
-non possono essere scelti due valori diversi
-```
-
-Questa proprieta' deve valere anche con:
-
-- proposer concorrenti;
-- messaggi ritardati;
-- retry;
-- acceptor che rispondono solo a una parte dei messaggi.
-
-### Liveness
-
-Paxos base non garantisce progresso in qualunque schedulazione.
-
-Se due proposer competono continuamente con numeri crescenti, possono disturbarsi
-a vicenda.
-
-Per ottenere progresso pratico, spesso si introduce un leader stabile:
-
-- un proposer principale;
-- meno competizione;
-- Multi-Paxos per decidere molte posizioni di log.
-
-## Paxos e clock logici
-
-Il collegamento con la prima parte della lezione e':
-
-- Lamport clock ordina eventi rispetto alla causalita';
-- ordine totale con Lamport impone una sequenza deterministica;
-- Paxos fa decidere a piu' nodi quale valore entra in una posizione condivisa.
-
-In altre parole:
-
-```text
-clock logico: quale ordine posso rappresentare?
-Paxos: quale valore possiamo decidere insieme?
-```
-
-Sono problemi collegati, ma non equivalenti.
-
-## Esempio da eseguire
-
-Il laboratorio contiene:
-
-```bash
-python3 labs/logical_clocks/paxos_single_decree.py
-```
-
-Lo script mostra:
-
-- tre acceptor;
-- quorum di due;
-- due proposer concorrenti;
-- un primo valore gia' accettato;
-- un secondo proposer che deve conservare quel valore.
-
-Il punto da osservare:
-
-```text
-un proposer con numero piu' alto non puo' scegliere liberamente un valore nuovo
-se scopre che un valore precedente potrebbe gia' essere stato scelto.
-```
-
-## Scelte implementative
-
-Per dare temporalita' certa a eventi e azioni bisogna chiarire prima la domanda.
-
-### Voglio ordinare eventi locali
-
-Usare un contatore locale monotono.
-
-### Voglio rispettare causalita' tra messaggi
-
-Usare Lamport clock.
-
-### Voglio un ordine totale riproducibile
-
-Usare Lamport clock piu' process id.
-
-### Voglio rilevare concorrenza
-
-Usare vector clock.
-
-### Voglio scadenze reali
-
-Usare clock fisici sincronizzati, dichiarando l'incertezza.
-
-### Voglio una decisione condivisa resistente a proposer concorrenti
-
-Usare un protocollo di consenso, per esempio Paxos.
-
-## Domande da portare in aula
-
-1. Se due eventi hanno timestamp fisico diverso, siamo sicuri del loro ordine causale?
-2. Se due eventi hanno timestamp Lamport diverso, siamo sicuri che uno abbia causato l'altro?
-3. Quando e' accettabile imporre un ordine totale artificiale?
-4. Che cosa succede se un nodo riceve un messaggio con timestamp logico molto piu' alto?
-5. Quando il costo dei vector clock e' giustificato?
-6. Quando un ordine totale non basta e serve consenso?
-7. Perche' Paxos costringe un proposer a riproporre un valore gia' accettato?
-
-## Collegamento con il KV store
-
-Nel KV store i clock possono essere usati per:
-
-- ordinare update replicati;
-- riconoscere scritture concorrenti;
-- decidere una regola deterministicamente condivisa di conflitto;
-- annotare log distribuiti;
-- ricostruire una storia plausibile durante il debugging;
-- implementare causal read o causal delivery;
-- scegliere un leader;
-- decidere la prossima entry di un log replicato.
-
-Esempio:
-
-```text
-SET x 1 timestamp=(7,A)
-SET x 2 timestamp=(7,B)
-```
-
-L'ordine totale puo' scegliere un vincitore.
-
-Ma se i due eventi sono concorrenti, un sistema piu' ricco potrebbe voler
-conservare il conflitto invece di nasconderlo.
-
-## Messaggio finale
-
-Il tempo in un sistema distribuito non e' un dato unico.
-
-E' un contratto:
-
-- tempo fisico per scadenze e misure;
-- tempo logico per causalita';
-- ordine totale per decidere;
-- vector clock per riconoscere concorrenza;
-- consenso per scegliere un valore condiviso.
-
-La domanda progettuale corretta non e':
-
-```text
-che timestamp metto?
-```
-
-ma:
-
-```text
-quale proprieta' temporale voglio promettere?
-```
+## Sintesi
+
+| Meccanismo | Domanda |
+| --- | --- |
+| Wall-clock locale | Che ora legge questo nodo? |
+| Clock monotono | Quanto tempo è passato localmente? |
+| Clock sincronizzato | In quale intervallo reale è avvenuto? |
+| Happened-before | Quale relazione causale posso dimostrare? |
+| Lamport clock | Quale timestamp rispetta la causalità nota? |
+| Ordine totale Lamport | Quale ordine deterministico imposto? |
+| Vector clock | Gli eventi sono causali o concorrenti? |
+| Causal delivery | Posso consegnare questo messaggio ora? |

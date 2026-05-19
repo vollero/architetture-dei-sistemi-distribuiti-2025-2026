@@ -35,8 +35,8 @@ def main() -> None:
         print(f"{event.order_key}: {event.process_id} {event.label}")
 
     print()
-    print("Nota: questo ordine e' deterministico, ma puo' ordinare eventi concorrenti.")
-    print("Non va confuso con una prova di causalita'.")
+    print("Nota: questo ordine è deterministico, ma può ordinare eventi concorrenti.")
+    print("Non va confuso con una prova di causalità.")
 
 
 if __name__ == "__main__":

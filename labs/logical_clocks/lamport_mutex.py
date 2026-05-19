@@ -46,7 +46,7 @@ def main() -> None:
 
     print()
     print("Il tie-breaker sul process_id rende l'ordine totale e riproducibile.")
-    print("Questo non dimostra causalita': serve a decidere chi entra prima.")
+    print("Questo non dimostra causalità: serve a decidere chi entra prima.")
 
 
 if __name__ == "__main__":

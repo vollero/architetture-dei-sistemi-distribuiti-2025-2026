@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simulazione di vector clock per distinguere causalita' e concorrenza.
+Simulazione di vector clock per distinguere causalità e concorrenza.
 """
 
 from dataclasses import dataclass
@@ -65,7 +65,7 @@ def main() -> None:
     print(f"B receive = {b_receive}")
     print(f"relazione: A send is {compare(message_clock, b_receive)} B receive")
     print()
-    print("Conclusione: i vector clock distinguono concorrenza e causalita'.")
+    print("Conclusione: i vector clock distinguono concorrenza e causalità.")
 
 
 if __name__ == "__main__":
